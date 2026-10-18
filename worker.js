@@ -20,7 +20,7 @@ self.onmessage = async (e) => {
     const { type, payload } = e.data;
 
     if (type === "LOAD_MODEL") {
-        const modelName = payload.modelName || "Xenova/whisper-tiny";
+        const modelName = payload.modelName || "Xenova/whisper-base";
         if (transcriber && currentModel === modelName) {
             self.postMessage({ type: "MODEL_READY", payload: { modelName } });
             return;

@@ -206,32 +206,133 @@ header {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Grid da Aba Ditador */
+/* Grid e Layout da Aba Ditador */
 .dictator-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
-@media (min-width: 900px) {
-    .dictator-grid {
-        grid-template-columns: 340px 1fr;
-    }
-}
-
-/* Painel de Controle Lateral */
-.control-card {
+/* 1. Cartão do Microfone */
+.mic-card {
     background: var(--bg-card);
     backdrop-filter: blur(16px);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
-    padding: 24px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 20px;
+    gap: 10px;
     box-shadow: var(--shadow-card);
+    order: 1; /* Sempre no topo no celular */
+}
+
+/* 2. Cartão do Editor de Texto */
+.editor-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    order: 2; /* Imediatamente abaixo do microfone no celular! */
+    min-height: 280px;
+}
+
+/* 3. Cartão de Opções Rápidas */
+.options-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 18px 16px;
+    box-shadow: var(--shadow-card);
+    order: 3; /* Abaixo do editor no celular */
+}
+
+.options-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Layout em Telas Médias e Desktop (Desktop 2 Colunas) */
+@media (min-width: 900px) {
+    .dictator-grid {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        grid-template-rows: auto 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+
+    .mic-card {
+        grid-column: 1;
+        grid-row: 1;
+        padding: 24px;
+        gap: 16px;
+    }
+
+    .options-card {
+        grid-column: 1;
+        grid-row: 2;
+        padding: 24px;
+    }
+
+    .editor-card {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        min-height: 520px;
+        height: 100%;
+    }
+}
+
+/* Otimização extra para Telas Menores de Celular */
+@media (max-width: 600px) {
+    .mic-card {
+        padding: 14px 10px;
+        gap: 8px;
+    }
+
+    .mic-button-wrapper {
+        padding: 6px;
+    }
+
+    .mic-toggle-btn {
+        width: 82px;
+        height: 82px;
+        font-size: 34px;
+    }
+
+    .mic-status-label {
+        font-size: 1.05rem;
+    }
+
+    .mic-status-sub {
+        font-size: 0.8rem;
+    }
+
+    .vu-meter-container {
+        max-width: 260px;
+    }
+
+    .editor-card {
+        min-height: 240px;
+    }
+
+    .editor-textarea {
+        min-height: 200px;
+        padding: 14px;
+        font-size: 0.95rem;
+    }
 }
 
 .mic-button-wrapper {

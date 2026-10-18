@@ -93,14 +93,15 @@
             <div class="dictator-grid">
                 
                 <!-- Painel de Controle Esquerdo -->
-                <aside class="control-card">
+                <!-- 1. Cartão do Microfone (Visível no topo no celular) -->
+                <div class="mic-card">
                     <div class="mic-button-wrapper">
                         <button class="mic-toggle-btn" id="btn-toggle-mic" title="Clique para Ligar ou Desligar o Microfone">
                             🎤
                         </button>
                     </div>
 
-                    <div>
+                    <div class="mic-info-wrapper">
                         <div class="mic-status-label" id="mic-status-label">Microfone Desligado</div>
                         <div class="mic-status-sub" id="mic-status-sub">Clique no botão para falar</div>
                     </div>
@@ -112,42 +113,9 @@
                             <div class="vu-bar-fill" id="vu-bar-fill"></div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Opções Rápidas -->
-                    <div class="quick-options">
-                        <div class="field-group">
-                            <label class="field-label" for="select-mic">Microfone de Entrada:</label>
-                            <select id="select-mic">
-                                <option value="">Microfone Padrão do Sistema</option>
-                            </select>
-                        </div>
-
-                        <div class="field-group">
-                            <label class="field-label" for="select-model">Modelo de IA (In-Browser):</label>
-                            <select id="select-model">
-                                <option value="Xenova/whisper-tiny" selected>Modelo Compacto (~39 MB - Ultra Rápido)</option>
-                                <option value="Xenova/whisper-base">Modelo Padrão (~75 MB - Equilibrado)</option>
-                                <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Precisão)</option>
-                                <option value="Xenova/whisper-medium">Modelo Profissional (~750 MB - Máxima Qualidade)</option>
-                            </select>
-                        </div>
-
-                        <div class="field-group">
-                            <label class="field-label" for="select-language">Idioma da Transcrição:</label>
-                            <select id="select-language">
-                                <option value="portuguese" selected>Português (Brasil)</option>
-                                <option value="english">Inglês</option>
-                                <option value="spanish">Espanhol</option>
-                            </select>
-                        </div>
-
-                        <button class="action-btn" id="btn-calibrate-noise" style="width: 100%; justify-content: center;">
-                            🎯 Calibrar Ruído da Sala
-                        </button>
-                    </div>
-                </aside>
-
-                <!-- Área do Editor de Ditado -->
+                <!-- 2. Área do Editor de Ditado (Logo abaixo do microfone no celular) -->
                 <div class="editor-card">
                     <div class="editor-toolbar">
                         <div class="toolbar-stats">
@@ -173,6 +141,42 @@
                         class="editor-textarea" 
                         placeholder="Clique no microfone e comece a falar... O texto aparecerá aqui em tempo real com pontuação inteligente e comandos de voz!"
                     ></textarea>
+                    </div>
+
+                <!-- 3. Opções Rápidas (Microfone, Modelo e Idioma) -->
+                <div class="options-card">
+                    <h4 class="options-card-title">⚙️ Parâmetros do Ditador</h4>
+                    <div class="quick-options">
+                        <div class="field-group">
+                            <label class="field-label" for="select-mic">Microfone de Entrada:</label>
+                            <select id="select-mic">
+                                <option value="">Microfone Padrão do Sistema</option>
+                            </select>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="field-label" for="select-model">Modelo de IA (In-Browser):</label>
+                            <select id="select-model">
+                                <option value="Xenova/whisper-tiny">Modelo Compacto (~39 MB - Ultra Rápido)</option>
+                                <option value="Xenova/whisper-base" selected>Modelo Padrão (~75 MB - Equilibrado)</option>
+                                <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Precisão)</option>
+                                <option value="Xenova/whisper-medium">Modelo Profissional (~750 MB - Máxima Qualidade)</option>
+                            </select>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="field-label" for="select-language">Idioma da Transcrição:</label>
+                            <select id="select-language">
+                                <option value="portuguese" selected>Português (Brasil)</option>
+                                <option value="english">Inglês</option>
+                                <option value="spanish">Espanhol</option>
+                            </select>
+                        </div>
+
+                        <button class="action-btn" id="btn-calibrate-noise" style="width: 100%; justify-content: center;">
+                            🎯 Calibrar Ruído da Sala
+                        </button>
+                    </div>
                 </div>
 
             </div>

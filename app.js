@@ -29,7 +29,7 @@ const DEFAULT_PROFILE = {
     },
     phrase_history: [],
     settings: {
-        modelName: "Xenova/whisper-tiny",
+        modelName: "Xenova/whisper-base",
         language: "portuguese",
         soundFeedback: true,
         voicePunctuation: true,
@@ -40,7 +40,7 @@ const DEFAULT_PROFILE = {
     }
 };
 
-const PROFILE_STORAGE_KEY = "wisp_user_profile_v3";
+const PROFILE_STORAGE_KEY = "wisp_user_profile_v4";
 
 class WispWebApp {
     constructor() {
