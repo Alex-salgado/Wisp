@@ -1,21 +1,21 @@
 /**
- * WISP WEB - CONTROLADOR PRINCIPAL
+ * WISP WEB - CONTROLADOR PRINCIPAL (V2)
  * Gerencia a interface, perfil do usuario, audio e worker de IA
  */
 
 import { AudioManager } from "./audio.js";
 
-// Configuracoes e Dados Padrao (Migrados do Wisp Desktop)
+// Configuracoes e Dados Padrao com exatamente 3 itens de teste selecionados
 const DEFAULT_PROFILE = {
     custom_vocabulary: [
-        "Tkinter", "NVIDIA", "Whisper", "RTX", "GPU", 
-        "Windows", "VS Code", "WhatsApp", "YouTube", "API", 
-        "CUDA", "Gravador", "Keila", "Parágrafo"
+        "Wisp",
+        "Inteligência Artificial",
+        "WhatsApp"
     ],
     correction_rules: {
         "ia": "IA",
-        "kaila": "Keila",
-        "parágrafo": "Parágrafo."
+        "wisper": "Whisper",
+        "vc": "você"
     },
     phrase_history: [],
     settings: {
@@ -47,10 +47,10 @@ class WispWebApp {
         console.log("[WispWeb] Aplicacao inicializada com sucesso!");
     }
 
-    // Carregar Perfil do localStorage
+    // Carregar Perfil do localStorage (Chave V2 para garantir os 3 itens de teste padrao)
     loadProfile() {
         try {
-            const saved = localStorage.getItem("wisp_user_profile");
+            const saved = localStorage.getItem("wisp_user_profile_v2");
             if (saved) {
                 const parsed = JSON.parse(saved);
                 return {
@@ -68,7 +68,7 @@ class WispWebApp {
 
     saveProfile() {
         try {
-            localStorage.setItem("wisp_user_profile", JSON.stringify(this.profile));
+            localStorage.setItem("wisp_user_profile_v2", JSON.stringify(this.profile));
         } catch (e) {
             console.error("Erro ao salvar perfil no localStorage:", e);
         }
@@ -384,23 +384,25 @@ class WispWebApp {
             processed = processed.replace(regex, to);
         }
 
-        // 2. Processar comando de voz "Enter"
+        // 2. Processar comando de voz "Entra" (substitui Enter conforme requisitado)
         let pressEnterAfter = false;
         let pressEnterBefore = false;
 
         if (this.profile.settings.voiceEnter) {
             const lower = processed.toLowerCase();
-            if (lower === "enter" || lower === "enter." || lower === "enter!") {
+            // Caso 1: Disse apenas "entra"
+            if (lower === "entra" || lower === "entra." || lower === "entra!") {
                 this.injectTextIntoEditor("\n");
-                this.recordHistory("[Comando Enter]");
+                this.recordHistory("[Comando Entra]");
                 return;
             }
 
-            if (/\benter[\.!\?]?$/i.test(lower)) {
-                processed = processed.replace(/\benter[\.!\?]?$/i, "").trim();
+            // Caso 2: Falou "entra" no final da frase
+            if (/\bentra[\.!\?]?$/i.test(lower)) {
+                processed = processed.replace(/\bentra[\.!\?]?$/i, "").trim();
                 pressEnterAfter = true;
-            } else if (/^enter\b[:,\s]*/i.test(lower)) {
-                processed = processed.replace(/^enter\b[:,\s]*/i, "").trim();
+            } else if (/^entra\b[:,\s]*/i.test(lower)) {
+                processed = processed.replace(/^entra\b[:,\s]*/i, "").trim();
                 pressEnterBefore = true;
             }
         }
@@ -637,7 +639,7 @@ class WispWebApp {
                 this.profile = JSON.parse(JSON.stringify(DEFAULT_PROFILE));
                 this.saveProfile();
                 this.renderAll();
-                this.showToast("Perfil restaurado aos padroes!");
+                this.showToast("Perfil restaurado aos padroes (3 itens de teste)!");
             }
         });
     }

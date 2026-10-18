@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -60,6 +60,9 @@
             <button class="tab-btn" id="tab-btn-settings" data-tab="tab-settings">
                 ⚙️ Configurações
             </button>
+            <button class="tab-btn" id="tab-btn-manual" data-tab="tab-manual">
+                📖 Manual & Privacidade
+            </button>
         </nav>
 
         <!-- ABA 1: DITADOR IA -->
@@ -93,7 +96,9 @@
                             <label class="field-label" for="select-model">Modelo Whisper (In-Browser):</label>
                             <select id="select-model">
                                 <option value="Xenova/whisper-tiny" selected>Whisper Tiny (~39 MB - Ultra Rápido)</option>
-                                <option value="Xenova/whisper-base">Whisper Base (~75 MB - Mais Preciso)</option>
+                                <option value="Xenova/whisper-base">Whisper Base (~75 MB - Equilibrado)</option>
+                                <option value="Xenova/whisper-small">Whisper Small (~150 MB - Alta Precisão)</option>
+                                <option value="Xenova/whisper-medium">Whisper Medium (~750 MB - Qualidade Máxima)</option>
                             </select>
                         </div>
 
@@ -138,15 +143,6 @@
                         class="editor-textarea" 
                         placeholder="Clique no microfone e comece a falar... O texto aparecerá aqui em tempo real com pontuação inteligente e comandos de voz!"
                     ></textarea>
-
-                    <div class="voice-commands-hint">
-                        <span>💡 Comandos de voz:</span>
-                        <span class="cmd-badge">"vírgula" ➔ ,</span>
-                        <span class="cmd-badge">"ponto final" ➔ .</span>
-                        <span class="cmd-badge">"ponto de exclamação" ➔ !</span>
-                        <span class="cmd-badge">"nova linha" ➔ ↵</span>
-                        <span class="cmd-badge">"enter" ➔ Pressiona Enter</span>
-                    </div>
                 </div>
 
             </div>
@@ -161,7 +157,7 @@
                 </p>
 
                 <form class="inline-form" id="form-add-vocab">
-                    <input type="text" id="input-new-vocab" placeholder="Ex: Wisp, React, WebGPU, Keila" required>
+                    <input type="text" id="input-new-vocab" placeholder="Ex: Wisp, Inteligência Artificial, WhatsApp" required>
                     <button type="submit" class="action-btn primary" id="btn-add-vocab">➕ Adicionar Termo</button>
                 </form>
 
@@ -266,8 +262,8 @@
 
                 <div class="toggle-row">
                     <div class="toggle-info">
-                        <h4>Comando de Voz "Enter"</h4>
-                        <p>Insere uma quebra de linha física no editor ao pronunciar a palavra "enter".</p>
+                        <h4>Comando de Voz "Entra"</h4>
+                        <p>Insere uma quebra de linha física no editor ao pronunciar a palavra "entra".</p>
                     </div>
                     <label class="switch">
                         <input type="checkbox" id="setting-voice-enter" checked>
@@ -311,6 +307,178 @@
                     <button class="action-btn danger" id="btn-reset-profile">
                         🔄 Restaurar Padrões de Fábrica
                     </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 5: MANUAL & PRIVACIDADE -->
+        <section class="tab-content" id="tab-manual">
+            <!-- Banner de Privacidade Absoluta -->
+            <div class="card" style="border: 1px solid rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(20, 23, 34, 0.9));">
+                <h3 class="card-title" style="color: #34d399;">
+                    🔒 Privacidade Absoluta & Segurança Total (In-Browser AI)
+                </h3>
+                <p style="font-size: 1.05rem; line-height: 1.7; color: #e2e8f0; margin-bottom: 16px;">
+                    O <strong>Wisp Web</strong> é construído sob a premissa de <strong>Privacidade por Design (Privacy by Design)</strong>.
+                    Diferente da maioria das soluções de transcrição de voz da internet, <strong>aqui sua voz NUNCA sai do seu computador</strong>.
+                </p>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">💻 100% Processamento Local</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            O modelo Whisper roda diretamente na memória RAM e na placa de vídeo (WebGPU) do seu navegador. Zero envio de áudio para servidores externos.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">🛡️ Nenhuma Gravação em Nuvem</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Nenhum áudio, texto ou dado pessoal é armazenado em servidores remotos. Ninguém além de você escuta ou tem acesso ao que você fala.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">✈️ Funciona 100% Offline</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Após baixar o modelo pela primeira vez para o cache do seu navegador (IndexedDB), você pode até desligar a internet que a transcrição continuará funcionando perfeitamente!
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">⚖️ 100% Compatível com LGPD</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Ideal para profissionais que lidam com dados sensíveis, advogados, médicos e empresas com rigorosas políticas de confidencialidade e sigilo.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guia de Uso Rápido -->
+            <div class="card">
+                <h3 class="card-title">🚀 Guia Rápido de Uso</h3>
+                <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
+                    <div style="display: flex; gap: 14px; align-items: flex-start;">
+                        <span style="background: var(--primary); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">1</span>
+                        <div>
+                            <strong style="color: #fff; font-size: 1rem;">Ligue o Microfone</strong>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+                                Na aba "Ditador IA", clique no botão circular grande do microfone (conceda permissão no navegador se for a primeira vez).
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 14px; align-items: flex-start;">
+                        <span style="background: var(--primary); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">2</span>
+                        <div>
+                            <strong style="color: #fff; font-size: 1rem;">Fale Normalmente</strong>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+                                Fale no seu ritmo habitual. O sistema detecta automaticamente pausas na fala, transcreve em tempo real e insere o texto diretamente no editor.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 14px; align-items: flex-start;">
+                        <span style="background: var(--primary); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">3</span>
+                        <div>
+                            <strong style="color: #fff; font-size: 1rem;">Copie ou Baixe o Resultado</strong>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+                                Ao concluir o ditado, use o botão <strong>"Copiar Texto"</strong> para colar no WhatsApp, Word, e-mail ou no seu software de preferência, ou clique em <strong>"Baixar .TXT"</strong>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabela Completa de Comandos de Voz -->
+            <div class="card">
+                <h3 class="card-title">🗣️ Tabela de Comandos de Voz Disponíveis</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
+                    Você pode ditar pontuações e comandos a qualquer momento. O Whisper continuará inserindo pontuações automáticas normalmente pela entonação da sua voz.
+                </p>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>O que você fala</th>
+                                <th style="width: 140px; text-align: center;">O que é inserido</th>
+                                <th>Exemplo Prático</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>"vírgula"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--primary); font-size: 1.2rem;">,</strong></td>
+                                <td>"Olá vírgula tudo bem" ➔ <em>Olá, tudo bem</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"ponto final"</code> ou <code>"ponto"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--primary); font-size: 1.2rem;">.</strong></td>
+                                <td>"Terminei o relatório ponto" ➔ <em>Terminei o relatório.</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"ponto de exclamação"</code> ou <code>"exclamação"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--accent-amber); font-size: 1.2rem;">!</strong></td>
+                                <td>"Parabéns pelo trabalho exclamação" ➔ <em>Parabéns pelo trabalho!</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"ponto de interrogação"</code> ou <code>"interrogação"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--accent-cyan); font-size: 1.2rem;">?</strong></td>
+                                <td>"Qual é o prazo interrogação" ➔ <em>Qual é o prazo?</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"dois pontos"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--primary); font-size: 1.2rem;">:</strong></td>
+                                <td>"Atenção dois pontos verificar valores" ➔ <em>Atenção: verificar valores</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"ponto e vírgula"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--primary); font-size: 1.2rem;">;</strong></td>
+                                <td>"Primeiro item ponto e vírgula segundo item" ➔ <em>Primeiro item; segundo item</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"nova linha"</code> ou <code>"parágrafo"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--accent-green); font-size: 1.2rem;">↵ Quebra</strong></td>
+                                <td>"Título nova linha Corpo do texto" ➔ <em>Pula para a linha de baixo</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"entra"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--accent-green); font-size: 1.2rem;">↵ Enter</strong></td>
+                                <td>Diga <strong>"entra"</strong> para dar enter e criar uma nova linha imediatamente</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Modelos e Dicas de Precisão -->
+            <div class="card">
+                <h3 class="card-title">💡 Dicas para Máxima Precisão</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 10px;">
+                    <div>
+                        <h4 style="color: #93c5fd; margin-bottom: 6px;">🎯 Escolha do Modelo Whisper</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            • <strong>Tiny (~39 MB)</strong>: Recomendado para computadores comuns ou celulares; respostas instantâneas.<br>
+                            • <strong>Base (~75 MB)</strong>: Equilíbrio ideal entre velocidade e vocabulário.<br>
+                            • <strong>Small (~150 MB)</strong>: Alta fidelidade para textos longos e palavras técnicas.<br>
+                            • <strong>Medium (~750 MB)</strong>: Máxima precisão de estúdio para quem possui placa de vídeo (GPU) potente.
+                        </p>
+                    </div>
+
+                    <div>
+                        <h4 style="color: #93c5fd; margin-bottom: 6px;">🎙️ Calibração de Ruído</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Antes de começar uma sessão de gravação, clique no botão <strong>"Calibrar Ruído da Sala"</strong> na barra lateral e fique em silêncio por 2 segundos. O sistema ajusta a sensibilidade do microfone automaticamente ao barulho do seu ambiente.
+                        </p>
+                    </div>
+
+                    <div>
+                        <h4 style="color: #93c5fd; margin-bottom: 6px;">📚 Vocabulário Personalizado</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Se você costuma usar termos da sua profissão, nomes de pessoas ou jargões técnicos, adicione-os na aba <strong>"Vocabulário & Regras"</strong>. O Whisper priorizará esses termos automaticamente durante a transcrição!
+                        </p>
+                    </div>
                 </div>
             </div>
         </section>
