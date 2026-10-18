@@ -1,11 +1,11 @@
-﻿/**
+/**
  * WISP WEB - CONTROLADOR PRINCIPAL
- * Gerencia a interface, perfil do usuário, áudio e worker de IA
+ * Gerencia a interface, perfil do usuario, audio e worker de IA
  */
 
 import { AudioManager } from "./audio.js";
 
-// Configurações e Dados Padrão (Migrados do Wisp Desktop)
+// Configuracoes e Dados Padrao (Migrados do Wisp Desktop)
 const DEFAULT_PROFILE = {
     custom_vocabulary: [
         "Tkinter", "NVIDIA", "Whisper", "RTX", "GPU", 
@@ -31,6 +31,7 @@ const DEFAULT_PROFILE = {
 
 class WispWebApp {
     constructor() {
+        console.log("[WispWeb] Inicializando aplicacao...");
         this.profile = this.loadProfile();
         this.audioManager = new AudioManager();
         this.worker = null;
@@ -43,6 +44,7 @@ class WispWebApp {
         this.initAudioControls();
         this.initProfileManager();
         this.renderAll();
+        console.log("[WispWeb] Aplicacao inicializada com sucesso!");
     }
 
     // Carregar Perfil do localStorage
@@ -72,7 +74,7 @@ class WispWebApp {
         }
     }
 
-    // Inicialização do DOM
+    // Inicializacao do DOM
     initDOM() {
         this.elements = {
             // Header
@@ -102,7 +104,7 @@ class WispWebApp {
             statCharCount: document.getElementById("stat-char-count"),
             statLatency: document.getElementById("stat-latency"),
 
-            // Vocabulário & Regras
+            // Vocabulario & Regras
             formAddVocab: document.getElementById("form-add-vocab"),
             inputNewVocab: document.getElementById("input-new-vocab"),
             tbodyVocab: document.getElementById("tbody-vocab"),
@@ -111,12 +113,12 @@ class WispWebApp {
             inputRuleTo: document.getElementById("input-rule-to"),
             tbodyRules: document.getElementById("tbody-rules"),
 
-            // Histórico
+            // Historico
             tbodyHistory: document.getElementById("tbody-history"),
             btnCopyHistory: document.getElementById("btn-copy-history"),
             btnClearHistory: document.getElementById("btn-clear-history"),
 
-            // Configurações
+            // Configuracoes
             settingSoundFeedback: document.getElementById("setting-sound-feedback"),
             settingVoicePunctuation: document.getElementById("setting-voice-punctuation"),
             settingVoiceEnter: document.getElementById("setting-voice-enter"),
@@ -131,42 +133,55 @@ class WispWebApp {
         };
     }
 
-    // Inicialização do Web Worker de IA
+    // Inicializacao do Web Worker de IA
     initWorker() {
-        this.worker = new Worker("worker.js", { type: "module" });
+        try {
+            console.log("[WispWeb] Inicializando Worker de IA...");
+            this.worker = new Worker("worker.js", { type: "module" });
 
-        this.worker.onmessage = (e) => {
-            const { type, payload } = e.data;
+            this.worker.onerror = (err) => {
+                console.error("[WispWeb] Erro no Worker de IA:", err);
+                this.updateSystemStatus("Erro no Worker IA", false, true);
+                this.showToast("Falha ao carregar motor de IA no navegador. Verifique a conexao.", "error");
+            };
 
-            switch (type) {
-                case "STATUS_UPDATE":
-                    this.updateSystemStatus(payload.status, payload.isBusy);
-                    break;
+            this.worker.onmessage = (e) => {
+                const { type, payload } = e.data;
 
-                case "MODEL_PROGRESS":
-                    this.handleModelDownloadProgress(payload);
-                    break;
+                switch (type) {
+                    case "STATUS_UPDATE":
+                        this.updateSystemStatus(payload.status, payload.isBusy);
+                        break;
 
-                case "MODEL_READY":
-                    this.isModelReady = true;
-                    this.elements.progressCard.style.display = "none";
-                    this.updateSystemStatus("Modelo pronto", false);
-                    this.showToast(Modelo '' pronto para uso local!);
-                    break;
+                    case "MODEL_PROGRESS":
+                        this.handleModelDownloadProgress(payload);
+                        break;
 
-                case "TRANSCRIBE_SUCCESS":
-                    this.handleTranscriptionSuccess(payload);
-                    break;
+                    case "MODEL_READY":
+                        this.isModelReady = true;
+                        this.elements.progressCard.style.display = "none";
+                        this.updateSystemStatus("Modelo pronto", false);
+                        this.showToast(`Modelo '${payload.modelName}' pronto para uso local!`);
+                        break;
 
-                case "ERROR":
-                    this.updateSystemStatus("Erro", false, true);
-                    this.showToast(payload.message, "error");
-                    break;
-            }
-        };
+                    case "TRANSCRIBE_SUCCESS":
+                        this.handleTranscriptionSuccess(payload);
+                        break;
 
-        // Solicita carregamento do modelo padrão salvo
-        this.loadSelectedModel();
+                    case "ERROR":
+                        this.updateSystemStatus("Erro", false, true);
+                        this.showToast(payload.message, "error");
+                        break;
+                }
+            };
+
+            // Solicita carregamento do modelo padrao salvo
+            this.loadSelectedModel();
+        } catch (err) {
+            console.error("[WispWeb] Falha ao instanciar Worker:", err);
+            this.updateSystemStatus("Erro de Inicializacao", false, true);
+            this.showToast("Navegador bloqueou execucao do Worker de IA.", "error");
+        }
     }
 
     loadSelectedModel() {
@@ -174,7 +189,7 @@ class WispWebApp {
         this.elements.progressCard.style.display = "block";
         this.elements.progressBarFill.style.width = "0%";
         this.elements.progressPercentage.textContent = "0%";
-        this.elements.progressFileName.textContent = Carregando ...;
+        this.elements.progressFileName.textContent = `Carregando ${this.profile.settings.modelName}...`;
 
         this.worker.postMessage({
             type: "LOAD_MODEL",
@@ -185,10 +200,10 @@ class WispWebApp {
     handleModelDownloadProgress(data) {
         if (data.status === "progress" && data.progress !== undefined) {
             const pct = Math.round(data.progress);
-            this.elements.progressBarFill.style.width = ${pct}%;
-            this.elements.progressPercentage.textContent = ${pct}%;
+            this.elements.progressBarFill.style.width = `${pct}%`;
+            this.elements.progressPercentage.textContent = `${pct}%`;
             if (data.file) {
-                this.elements.progressFileName.textContent = Baixando:  (%);
+                this.elements.progressFileName.textContent = `Baixando: ${data.file} (${pct}%)`;
             }
         } else if (data.status === "done") {
             this.elements.progressBarFill.style.width = "100%";
@@ -197,6 +212,7 @@ class WispWebApp {
     }
 
     updateSystemStatus(text, isBusy = false, isError = false) {
+        if (!this.elements.statusText) return;
         this.elements.statusText.textContent = text;
         this.elements.statusDot.className = "status-dot";
         if (isError) {
@@ -206,7 +222,7 @@ class WispWebApp {
         }
     }
 
-    // Navegação por Abas
+    // Navegacao por Abas
     initTabs() {
         const tabBtns = document.querySelectorAll(".tab-btn");
         const tabContents = document.querySelectorAll(".tab-content");
@@ -224,11 +240,11 @@ class WispWebApp {
         });
     }
 
-    // Controles de Áudio e Microfone
+    // Controles de Audio e Microfone
     initAudioControls() {
         this.elements.btnToggleMic.addEventListener("click", () => this.toggleMicrophone());
 
-        // Mudança de modelo
+        // Mudanca de modelo
         this.elements.selectModel.value = this.profile.settings.modelName;
         this.elements.selectModel.addEventListener("change", (e) => {
             this.profile.settings.modelName = e.target.value;
@@ -243,11 +259,11 @@ class WispWebApp {
             this.saveProfile();
         });
 
-        // Calibração de Ruído
+        // Calibracao de Ruido
         this.elements.btnCalibrateNoise.addEventListener("click", async () => {
             this.elements.btnCalibrateNoise.disabled = true;
-            this.elements.btnCalibrateNoise.textContent = "Medindo silêncio da sala (2s)...";
-            this.showToast("Fique em silêncio por 2 segundos...", "info");
+            this.elements.btnCalibrateNoise.textContent = "Medindo silencio da sala (2s)...";
+            this.showToast("Fique em silencio por 2 segundos...", "info");
 
             const newThreshold = await this.audioManager.calibrateNoise(2.0);
             this.profile.settings.silenceThreshold = Number(newThreshold.toFixed(4));
@@ -257,21 +273,21 @@ class WispWebApp {
             this.saveProfile();
 
             this.elements.btnCalibrateNoise.disabled = false;
-            this.elements.btnCalibrateNoise.textContent = "🎚️ Calibrar Ruído da Sala";
-            this.showToast(Sensibilidade calibrada para !);
+            this.elements.btnCalibrateNoise.textContent = "🎚️ Calibrar Ruido da Sala";
+            this.showToast(`Sensibilidade calibrada para ${this.profile.settings.silenceThreshold}!`);
         });
 
-        // Ações do Editor
+        // Acoes do Editor
         this.elements.editor.addEventListener("input", () => this.updateEditorStats());
 
         this.elements.btnCopyText.addEventListener("click", () => {
             const text = this.elements.editor.value;
             if (!text.trim()) {
-                this.showToast("O editor está vazio!", "info");
+                this.showToast("O editor esta vazio!", "info");
                 return;
             }
             navigator.clipboard.writeText(text);
-            this.showToast("Texto copiado para a Área de Transferência!");
+            this.showToast("Texto copiado para a Area de Transferencia!");
         });
 
         this.elements.btnDownloadTxt.addEventListener("click", () => {
@@ -284,7 +300,7 @@ class WispWebApp {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = wisp_ditado_.txt;
+            a.download = `wisp_ditado_${new Date().toISOString().slice(0, 10)}.txt`;
             a.click();
             URL.revokeObjectURL(url);
             this.showToast("Arquivo .txt baixado com sucesso!");
@@ -321,7 +337,7 @@ class WispWebApp {
                 await this.audioManager.start(
                     (audioFloat32, durationSec) => this.onSpeechChunkCaptured(audioFloat32, durationSec),
                     (level) => {
-                        this.elements.vuBarFill.style.width = ${level}%;
+                        this.elements.vuBarFill.style.width = `${level}%`;
                     }
                 );
 
@@ -332,16 +348,15 @@ class WispWebApp {
                 this.updateSystemStatus("Ouvindo...", true);
             } catch (err) {
                 console.error("Erro ao acessar microfone:", err);
-                this.showToast("Permissão de microfone negada ou indisponível!", "error");
+                this.showToast("Permissao de microfone negada ou indisponivel!", "error");
             }
         }
     }
 
-    // Quando um trecho de áudio completo é capturado pelo VAD
+    // Quando um trecho de audio completo e capturado pelo VAD
     onSpeechChunkCaptured(audioFloat32, durationSec) {
         if (!this.isModelReady) return;
 
-        // Monta initial_prompt combinando vocabulário prioritário e frases recentes
         const initialPrompt = this.profile.custom_vocabulary.join(", ");
 
         this.worker.postMessage({
@@ -355,17 +370,17 @@ class WispWebApp {
         });
     }
 
-    // Tratamento do resultado da transcrição
+    // Tratamento do resultado da transcricao
     handleTranscriptionSuccess(payload) {
         const { rawText, latency } = payload;
         if (!rawText || !rawText.trim()) return;
 
-        this.elements.statLatency.textContent = ${latency} ms;
+        this.elements.statLatency.textContent = `${latency} ms`;
 
-        // 1. Aplicar regras de auto-correção
+        // 1. Aplicar regras de auto-correcao
         let processed = rawText.trim();
         for (const [from, to] of Object.entries(this.profile.correction_rules)) {
-            const regex = new RegExp(\\b\\b, "gi");
+            const regex = new RegExp(`\\b${from}\\b`, "gi");
             processed = processed.replace(regex, to);
         }
 
@@ -390,7 +405,7 @@ class WispWebApp {
             }
         }
 
-        // 3. Processar comandos explícitos de pontuação por voz
+        // 3. Processar comandos explicitos de pontuacao por voz
         if (this.profile.settings.voicePunctuation) {
             const rules = [
                 [/\b(ponto de exclama[çc][aã]o|exclama[çc][aã]o)\b/gi, "!"],
@@ -406,9 +421,9 @@ class WispWebApp {
                 processed = processed.replace(pattern, symbol);
             }
 
-            // Ajustar espaçamento de pontuação
-            processed = processed.replace(/\s+([,.:;!?])/g, "");
-            processed = processed.replace(/([,.:;!?])([A-Za-zÀ-ÿ0-9])/g, " ");
+            // Ajustar espacamento de pontuacao
+            processed = processed.replace(/\s+([,.:;!?])/g, "$1");
+            processed = processed.replace(/([,.:;!?])([A-Za-zÀ-ÿ0-9])/g, "$1 $2");
         }
 
         if (pressEnterBefore) {
@@ -425,7 +440,7 @@ class WispWebApp {
         }
     }
 
-    // Inserção inteligente de texto no cursor do editor
+    // Insercao inteligente de texto no cursor do editor
     injectTextIntoEditor(text) {
         const editor = this.elements.editor;
         const start = editor.selectionStart;
@@ -451,7 +466,6 @@ class WispWebApp {
         const timeStr = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
         this.profile.phrase_history.unshift({ time: timeStr, text: phrase });
 
-        // Manter últimas 100 frases
         if (this.profile.phrase_history.length > 100) {
             this.profile.phrase_history.pop();
         }
@@ -474,11 +488,9 @@ class WispWebApp {
             const now = ctx.currentTime;
 
             if (isAscending) {
-                // Tom ascendente (440Hz -> 880Hz)
                 osc.frequency.setValueAtTime(440, now);
                 osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
             } else {
-                // Tom descendente (880Hz -> 440Hz)
                 osc.frequency.setValueAtTime(880, now);
                 osc.frequency.exponentialRampToValueAtTime(440, now + 0.12);
             }
@@ -492,13 +504,13 @@ class WispWebApp {
             osc.start(now);
             osc.stop(now + 0.16);
         } catch (e) {
-            // Silencioso se navegador bloquear autoplay de áudio
+            // Silencioso se navegador bloquear autoplay
         }
     }
 
-    // Gerenciamento de Perfil e Configurações
+    // Gerenciamento de Perfil e Configuracoes
     initProfileManager() {
-        // Form Vocabulário
+        // Form Vocabulario
         this.elements.formAddVocab.addEventListener("submit", (e) => {
             e.preventDefault();
             const val = this.elements.inputNewVocab.value.trim();
@@ -507,7 +519,7 @@ class WispWebApp {
                 this.saveProfile();
                 this.renderVocabTable();
                 this.elements.inputNewVocab.value = "";
-                this.showToast(Termo '' adicionado ao vocabulário!);
+                this.showToast(`Termo '${val}' adicionado ao vocabulário!`);
             }
         });
 
@@ -522,11 +534,11 @@ class WispWebApp {
                 this.renderRulesTable();
                 this.elements.inputRuleFrom.value = "";
                 this.elements.inputRuleTo.value = "";
-                this.showToast(Regra '' ➔ '' salva!);
+                this.showToast(`Regra '${from}' ➔ '${to}' salva!`);
             }
         });
 
-        // Configurações Toggles & Sliders
+        // Configuracoes Toggles & Sliders
         this.elements.settingSoundFeedback.checked = this.profile.settings.soundFeedback;
         this.elements.settingSoundFeedback.addEventListener("change", (e) => {
             this.profile.settings.soundFeedback = e.target.checked;
@@ -546,10 +558,10 @@ class WispWebApp {
         });
 
         this.elements.settingPauseDuration.value = this.profile.settings.pauseDuration;
-        this.elements.labelPauseVal.textContent = ${this.profile.settings.pauseDuration} s;
+        this.elements.labelPauseVal.textContent = `${this.profile.settings.pauseDuration} s`;
         this.elements.settingPauseDuration.addEventListener("input", (e) => {
             const val = parseFloat(e.target.value);
-            this.elements.labelPauseVal.textContent = ${val} s;
+            this.elements.labelPauseVal.textContent = `${val} s`;
             this.profile.settings.pauseDuration = val;
             this.saveProfile();
         });
@@ -563,23 +575,23 @@ class WispWebApp {
             this.saveProfile();
         });
 
-        // Ações de Histórico
+        // Acoes de Historico
         this.elements.btnCopyHistory.addEventListener("click", () => {
-            const lines = this.profile.phrase_history.map(item => [] ).join("\n");
+            const lines = this.profile.phrase_history.map(item => `[${item.time}] ${item.text}`).join("\n");
             if (!lines) {
-                this.showToast("Histórico vazio!", "info");
+                this.showToast("Historico vazio!", "info");
                 return;
             }
             navigator.clipboard.writeText(lines);
-            this.showToast("Todo o histórico copiado!");
+            this.showToast("Todo o historico copiado!");
         });
 
         this.elements.btnClearHistory.addEventListener("click", () => {
-            if (this.profile.phrase_history.length && confirm("Limpar todo o histórico de falas?")) {
+            if (this.profile.phrase_history.length && confirm("Limpar todo o historico de falas?")) {
                 this.profile.phrase_history = [];
                 this.saveProfile();
                 this.renderHistoryTable();
-                this.showToast("Histórico limpo.");
+                this.showToast("Historico limpo.");
             }
         });
 
@@ -590,7 +602,7 @@ class WispWebApp {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = wisp_perfil_.json;
+            a.download = `wisp_perfil_${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
             this.showToast("Perfil exportado com sucesso!");
@@ -610,10 +622,10 @@ class WispWebApp {
                         this.renderAll();
                         this.showToast("Perfil importado com sucesso!");
                     } else {
-                        throw new Error("Formato inválido");
+                        throw new Error("Formato invalido");
                     }
                 } catch (err) {
-                    this.showToast("Arquivo JSON de perfil inválido!", "error");
+                    this.showToast("Arquivo JSON de perfil invalido!", "error");
                 }
             };
             reader.readAsText(file);
@@ -621,11 +633,11 @@ class WispWebApp {
         });
 
         this.elements.btnResetProfile.addEventListener("click", () => {
-            if (confirm("Deseja restaurar as configurações e vocabulário para os padrões de fábrica?")) {
+            if (confirm("Deseja restaurar as configuracoes e vocabulario para os padroes de fabrica?")) {
                 this.profile = JSON.parse(JSON.stringify(DEFAULT_PROFILE));
                 this.saveProfile();
                 this.renderAll();
-                this.showToast("Perfil restaurado aos padrões!");
+                this.showToast("Perfil restaurado aos padroes!");
             }
         });
     }
@@ -638,23 +650,24 @@ class WispWebApp {
 
     renderVocabTable() {
         const tbody = this.elements.tbodyVocab;
+        if (!tbody) return;
         tbody.innerHTML = "";
 
         if (this.profile.custom_vocabulary.length === 0) {
-            tbody.innerHTML = <tr><td colspan="2" style="text-align: center; color: var(--text-muted);">Nenhum termo cadastrado.</td></tr>;
+            tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted);">Nenhum termo cadastrado.</td></tr>`;
             return;
         }
 
         this.profile.custom_vocabulary.forEach((word, idx) => {
             const tr = document.createElement("tr");
-            tr.innerHTML = 
-                <td><strong></strong></td>
+            tr.innerHTML = `
+                <td><strong>${word}</strong></td>
                 <td style="text-align: center;">
-                    <button class="action-btn danger btn-del-vocab" data-idx="" style="padding: 4px 8px; font-size: 0.8rem;">
+                    <button class="action-btn danger btn-del-vocab" data-idx="${idx}" style="padding: 4px 8px; font-size: 0.8rem;">
                         🗑️ Excluir
                     </button>
                 </td>
-            ;
+            `;
             tbody.appendChild(tr);
         });
 
@@ -670,25 +683,26 @@ class WispWebApp {
 
     renderRulesTable() {
         const tbody = this.elements.tbodyRules;
+        if (!tbody) return;
         tbody.innerHTML = "";
 
         const rules = Object.entries(this.profile.correction_rules);
         if (rules.length === 0) {
-            tbody.innerHTML = <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Nenhuma regra cadastrada.</td></tr>;
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Nenhuma regra cadastrada.</td></tr>`;
             return;
         }
 
         rules.forEach(([from, to]) => {
             const tr = document.createElement("tr");
-            tr.innerHTML = 
-                <td><code></code></td>
-                <td><strong style="color: var(--accent-green);"></strong></td>
+            tr.innerHTML = `
+                <td><code>${from}</code></td>
+                <td><strong style="color: var(--accent-green);">${to}</strong></td>
                 <td style="text-align: center;">
-                    <button class="action-btn danger btn-del-rule" data-from="" style="padding: 4px 8px; font-size: 0.8rem;">
+                    <button class="action-btn danger btn-del-rule" data-from="${from}" style="padding: 4px 8px; font-size: 0.8rem;">
                         🗑️ Excluir
                     </button>
                 </td>
-            ;
+            `;
             tbody.appendChild(tr);
         });
 
@@ -704,27 +718,28 @@ class WispWebApp {
 
     renderHistoryTable() {
         const tbody = this.elements.tbodyHistory;
+        if (!tbody) return;
         tbody.innerHTML = "";
 
         if (this.profile.phrase_history.length === 0) {
-            tbody.innerHTML = <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Nenhuma transcrição recente registrada.</td></tr>;
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Nenhuma transcricao recente registrada.</td></tr>`;
             return;
         }
 
         this.profile.phrase_history.forEach((item, idx) => {
             const tr = document.createElement("tr");
-            tr.innerHTML = 
-                <td style="color: var(--text-muted); font-size: 0.85rem;"></td>
-                <td></td>
+            tr.innerHTML = `
+                <td style="color: var(--text-muted); font-size: 0.85rem;">${item.time}</td>
+                <td>${item.text}</td>
                 <td style="text-align: center; display: flex; gap: 6px; justify-content: center;">
-                    <button class="action-btn btn-copy-phrase" data-text="" style="padding: 4px 8px; font-size: 0.8rem;">
+                    <button class="action-btn btn-copy-phrase" data-text="${item.text.replace(/"/g, '&quot;')}" style="padding: 4px 8px; font-size: 0.8rem;">
                         📋
                     </button>
-                    <button class="action-btn danger btn-del-phrase" data-idx="" style="padding: 4px 8px; font-size: 0.8rem;">
+                    <button class="action-btn danger btn-del-phrase" data-idx="${idx}" style="padding: 4px 8px; font-size: 0.8rem;">
                         🗑️
                     </button>
                 </td>
-            ;
+            `;
             tbody.appendChild(tr);
         });
 
@@ -748,11 +763,12 @@ class WispWebApp {
 
     showToast(message, type = "success") {
         const container = this.elements.toastContainer;
+        if (!container) return;
         const toast = document.createElement("div");
         toast.className = "toast";
 
         const icon = type === "error" ? "❌" : (type === "info" ? "ℹ️" : "✅");
-        toast.innerHTML = <span></span> <span></span>;
+        toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
         container.appendChild(toast);
 
         setTimeout(() => {
@@ -764,7 +780,15 @@ class WispWebApp {
     }
 }
 
-// Inicializar aplicativo quando o DOM estiver pronto
-document.addEventListener("DOMContentLoaded", () => {
-    window.wispApp = new WispWebApp();
-});
+// Inicializacao robusta para scripts com type="module"
+function bootApp() {
+    if (!window.wispApp) {
+        window.wispApp = new WispWebApp();
+    }
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootApp);
+} else {
+    bootApp();
+}

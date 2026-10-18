@@ -12,14 +12,14 @@ class DualHeaderHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
 
     def end_headers(self):
-        # Permite uso de SharedArrayBuffer e máxima performance de WebAssembly/WebGPU
-        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        # Permitir CORS e evitar bloqueios de CORP (require-corp) para download de modelos
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         super().end_headers()
 
     def guess_type(self, path):
-        # Assegurar MIME Types corretos para modelos e WebAssembly
         if path.endswith(".wasm"):
             return "application/wasm"
         if path.endswith(".onnx"):
@@ -28,6 +28,8 @@ class DualHeaderHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             return "application/javascript"
         if path.endswith(".json"):
             return "application/json"
+        if path.endswith(".css"):
+            return "text/css"
         return super().guess_type(path)
 
 def run():
@@ -41,7 +43,6 @@ def run():
     print(f"Acessivel em: http://localhost:{PORT}")
     print("=" * 60)
     
-    # Abre o navegador automaticamente
     try:
         webbrowser.open(f"http://localhost:{PORT}")
     except Exception:

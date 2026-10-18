@@ -1,11 +1,16 @@
-﻿// Web Worker para Inferência do Modelo Whisper 100% In-Browser (Client-Side)
-// Não trava o navegador durante a transcrição
-
-import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+// Web Worker para Inferência do Modelo Whisper 100% In-Browser (Client-Side)
+import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/+esm";
 
 // Configurações do ambiente
 env.allowLocalModels = false;
 env.useBrowserCache = true;
+
+// Configurar fallback para WASM sem exigir SharedArrayBuffer
+try {
+    if (env.backends && env.backends.onnx && env.backends.onnx.wasm) {
+        env.backends.onnx.wasm.numThreads = 1;
+    }
+} catch (_) {}
 
 let transcriber = null;
 let currentModel = "";
@@ -50,9 +55,11 @@ self.onmessage = async (e) => {
             });
         } catch (err) {
             isInitializing = false;
+            const errMsg = (err && err.message) ? err.message : String(err);
+            console.error("Erro no Worker ao carregar modelo:", err);
             self.postMessage({ 
                 type: "ERROR", 
-                payload: { message: Erro ao carregar modelo:  } 
+                payload: { message: "Erro ao carregar modelo: " + errMsg } 
             });
         }
     } 
@@ -100,9 +107,11 @@ self.onmessage = async (e) => {
                 payload: { status: "Pronto para ouvir", isBusy: false } 
             });
         } catch (err) {
+            const errMsg = (err && err.message) ? err.message : String(err);
+            console.error("Erro na transcrição:", err);
             self.postMessage({ 
                 type: "ERROR", 
-                payload: { message: Erro ao transcrever:  } 
+                payload: { message: "Erro ao transcrever: " + errMsg } 
             });
             self.postMessage({ 
                 type: "STATUS_UPDATE", 
