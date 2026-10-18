@@ -1,0 +1,326 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wisp Web - Ditador e Transcritor de Voz IA no Navegador</title>
+    <meta name="description" content="Transcritor de voz IA 100% local no navegador utilizando Whisper e WebGPU. Sem envio de dados para servidores externos.">
+    <link rel="icon" type="image/png" href="assets/icon.png">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Header Principal -->
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon">🎙️</div>
+            <div class="logo-text">
+                <h1>Wisp Web</h1>
+                <div class="logo-tag">In-Browser AI (Client-Side)</div>
+            </div>
+        </div>
+
+        <div class="header-status-badge" id="system-status-badge">
+            <span class="status-dot" id="system-status-dot"></span>
+            <span id="system-status-text">Inicializando...</span>
+        </div>
+    </header>
+
+    <!-- Container Principal da Aplicação -->
+    <main class="app-container">
+
+        <!-- Barra de Progresso de Download do Modelo -->
+        <div class="progress-card" id="model-progress-card">
+            <div class="progress-header">
+                <span id="progress-file-name">Baixando modelo Whisper para a memória do navegador...</span>
+                <span id="progress-percentage">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progress-bar-fill"></div>
+            </div>
+        </div>
+
+        <!-- Barra de Navegação por Abas -->
+        <nav class="tabs-nav" aria-label="Navegação do aplicativo">
+            <button class="tab-btn active" id="tab-btn-dictator" data-tab="tab-dictator">
+                🎙️ Ditador IA
+            </button>
+            <button class="tab-btn" id="tab-btn-vocab" data-tab="tab-vocab">
+                📚 Vocabulário & Regras
+            </button>
+            <button class="tab-btn" id="tab-btn-history" data-tab="tab-history">
+                📜 Histórico de Frases
+            </button>
+            <button class="tab-btn" id="tab-btn-settings" data-tab="tab-settings">
+                ⚙️ Configurações
+            </button>
+        </nav>
+
+        <!-- ABA 1: DITADOR IA -->
+        <section class="tab-content active" id="tab-dictator">
+            <div class="dictator-grid">
+                
+                <!-- Painel de Controle Esquerdo -->
+                <aside class="control-card">
+                    <div class="mic-button-wrapper">
+                        <button class="mic-toggle-btn" id="btn-toggle-mic" title="Clique para Ligar ou Desligar o Microfone">
+                            🎤
+                        </button>
+                    </div>
+
+                    <div>
+                        <div class="mic-status-label" id="mic-status-label">Microfone Desligado</div>
+                        <div class="mic-status-sub" id="mic-status-sub">Clique no botão para falar</div>
+                    </div>
+
+                    <!-- Medidor de Nível VU -->
+                    <div class="vu-meter-container">
+                        <div class="vu-label">Nível de Volume da Voz</div>
+                        <div class="vu-bar-bg">
+                            <div class="vu-bar-fill" id="vu-bar-fill"></div>
+                        </div>
+                    </div>
+
+                    <!-- Opções Rápidas -->
+                    <div class="quick-options">
+                        <div class="field-group">
+                            <label class="field-label" for="select-model">Modelo Whisper (In-Browser):</label>
+                            <select id="select-model">
+                                <option value="Xenova/whisper-tiny" selected>Whisper Tiny (~39 MB - Ultra Rápido)</option>
+                                <option value="Xenova/whisper-base">Whisper Base (~75 MB - Mais Preciso)</option>
+                            </select>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="field-label" for="select-language">Idioma da Transcrição:</label>
+                            <select id="select-language">
+                                <option value="portuguese" selected>Português (Brasil)</option>
+                                <option value="english">Inglês</option>
+                                <option value="spanish">Espanhol</option>
+                            </select>
+                        </div>
+
+                        <button class="action-btn" id="btn-calibrate-noise" style="width: 100%; justify-content: center;">
+                            🎚️ Calibrar Ruído da Sala
+                        </button>
+                    </div>
+                </aside>
+
+                <!-- Área do Editor de Ditado -->
+                <div class="editor-card">
+                    <div class="editor-toolbar">
+                        <div class="toolbar-stats">
+                            <span>Palavras: <strong id="stat-word-count">0</strong></span>
+                            <span>Caracteres: <strong id="stat-char-count">0</strong></span>
+                            <span>Latência: <strong id="stat-latency">-- ms</strong></span>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button class="action-btn primary" id="btn-copy-text" title="Copiar todo o texto para a Área de Transferência">
+                                📋 Copiar Texto
+                            </button>
+                            <button class="action-btn" id="btn-download-txt" title="Baixar texto como arquivo .txt">
+                                💾 Baixar .TXT
+                            </button>
+                            <button class="action-btn danger" id="btn-clear-text" title="Limpar editor">
+                                🗑️ Limpar
+                            </button>
+                        </div>
+                    </div>
+
+                    <textarea 
+                        id="dictation-editor" 
+                        class="editor-textarea" 
+                        placeholder="Clique no microfone e comece a falar... O texto aparecerá aqui em tempo real com pontuação inteligente e comandos de voz!"
+                    ></textarea>
+
+                    <div class="voice-commands-hint">
+                        <span>💡 Comandos de voz:</span>
+                        <span class="cmd-badge">"vírgula" ➔ ,</span>
+                        <span class="cmd-badge">"ponto final" ➔ .</span>
+                        <span class="cmd-badge">"ponto de exclamação" ➔ !</span>
+                        <span class="cmd-badge">"nova linha" ➔ ↵</span>
+                        <span class="cmd-badge">"enter" ➔ Pressiona Enter</span>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ABA 2: VOCABULÁRIO & REGRAS -->
+        <section class="tab-content" id="tab-vocab">
+            <div class="card">
+                <h3 class="card-title">📁 Vocabulário Prioritário (Hotwords)</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
+                    Palavras, termos técnicos e nomes próprios que o Whisper deve priorizar durante a inferência.
+                </p>
+
+                <form class="inline-form" id="form-add-vocab">
+                    <input type="text" id="input-new-vocab" placeholder="Ex: Wisp, React, WebGPU, Keila" required>
+                    <button type="submit" class="action-btn primary" id="btn-add-vocab">➕ Adicionar Termo</button>
+                </form>
+
+                <div class="table-wrapper">
+                    <table id="table-vocab">
+                        <thead>
+                            <tr>
+                                <th>Termo Prioritário</th>
+                                <th style="width: 100px; text-align: center;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-vocab">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">⚙️ Regras de Auto-Correção ("Quando ouve X ➔ substitui por Y")</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
+                    Corrija vícios de linguagem ou palavras frequentemente mal interpretadas pelo microfone.
+                </p>
+
+                <form class="inline-form" id="form-add-rule">
+                    <input type="text" id="input-rule-from" placeholder="Quando o Whisper entender (ex: ia)" required>
+                    <input type="text" id="input-rule-to" placeholder="Substituir por (ex: IA)" required>
+                    <button type="submit" class="action-btn primary" id="btn-add-rule">➕ Adicionar Regra</button>
+                </form>
+
+                <div class="table-wrapper">
+                    <table id="table-rules">
+                        <thead>
+                            <tr>
+                                <th>Texto Ouvido</th>
+                                <th>Substituição Correta</th>
+                                <th style="width: 100px; text-align: center;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-rules">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 3: HISTÓRICO DE FRASES -->
+        <section class="tab-content" id="tab-history">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                    <h3 class="card-title" style="margin-bottom: 0;">📜 Histórico Recente de Transcrições</h3>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="action-btn" id="btn-copy-history">📋 Copiar Todo Histórico</button>
+                        <button class="action-btn danger" id="btn-clear-history">🗑️ Limpar Histórico</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table id="table-history">
+                        <thead>
+                            <tr>
+                                <th style="width: 110px;">Horário</th>
+                                <th>Frase Transcrita</th>
+                                <th style="width: 120px; text-align: center;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-history">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 4: CONFIGURAÇÕES -->
+        <section class="tab-content" id="tab-settings">
+            <div class="card">
+                <h3 class="card-title">🎛️ Parâmetros de Captura & Áudio</h3>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <h4>Avisos Sonoros (Beeps)</h4>
+                        <p>Emite um sinal sonoro sintetizado suave ao ativar ou desativar o microfone.</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-sound-feedback" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <h4>Comandos de Voz para Pontuação</h4>
+                        <p>Converte comandos falados como "vírgula", "ponto final" e "ponto de exclamação".</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-voice-punctuation" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <h4>Comando de Voz "Enter"</h4>
+                        <p>Insere uma quebra de linha física no editor ao pronunciar a palavra "enter".</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-voice-enter" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 16px;">
+                    <div class="field-group">
+                        <div style="display: flex; justify-content: space-between;">
+                            <label class="field-label" for="setting-pause-duration">Tempo de Silêncio para Concluir a Frase (segundos):</label>
+                            <span id="label-pause-val" style="color: var(--primary); font-weight: 700;">0.75 s</span>
+                        </div>
+                        <input type="range" id="setting-pause-duration" min="0.4" max="2.0" step="0.05" value="0.75">
+                    </div>
+
+                    <div class="field-group">
+                        <div style="display: flex; justify-content: space-between;">
+                            <label class="field-label" for="setting-silence-threshold">Sensibilidade do Microfone (Limiar de Energia):</label>
+                            <span id="label-threshold-val" style="color: var(--primary); font-weight: 700;">0.015</span>
+                        </div>
+                        <input type="range" id="setting-silence-threshold" min="0.005" max="0.06" step="0.001" value="0.015">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">💾 Backup & Portabilidade do Perfil</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.9rem;">
+                    Exporte todo o seu vocabulário, regras de correção e configurações para levar a qualquer outro navegador ou computador.
+                </p>
+
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button class="action-btn primary" id="btn-export-profile">
+                        💾 Exportar Perfil Completo (.json)
+                    </button>
+                    <label class="action-btn" for="input-import-profile" style="cursor: pointer;">
+                        📂 Importar Perfil (.json)
+                        <input type="file" id="input-import-profile" accept=".json" style="display: none;">
+                    </label>
+                    <button class="action-btn danger" id="btn-reset-profile">
+                        🔄 Restaurar Padrões de Fábrica
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Container de Toasts de Notificação -->
+    <div id="toast-container" aria-live="polite"></div>
+
+    <!-- Scripts da Aplicação -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

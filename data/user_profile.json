@@ -1,0 +1,40 @@
+{
+    "custom_vocabulary": [
+        "Tkinter",
+        "NVIDIA",
+        "Whisper",
+        "RTX",
+        "GPU",
+        "Windows",
+        "VS Code",
+        "WhatsApp",
+        "YouTube",
+        "API",
+        "CUDA",
+        "Gravador",
+        "Keila",
+        "Parágrafo"
+    ],
+    "correction_rules": {
+        "ia": "IA",
+        "kaila": "Keila",
+        "parágrafo": "Parágrafo."
+    },
+    "phrase_history": [
+        "Contexto.",
+        "Contexto.",
+        "Desligar.",
+        "Contexto.",
+        "Desligar.",
+        "Porque hoje a gente faz muito comércio ao padrão, né?",
+        "Então, a gente vai ver.",
+        "Tkinter, NVIDIA, Whisper, RTX, Parágrafo..",
+        "Gravador desligar.",
+        "Contexto."
+    ],
+    "stats": {
+        "total_transcriptions": 397,
+        "total_words": 1502,
+        "corrections_learned": 0
+    }
+}
