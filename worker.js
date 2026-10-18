@@ -1,4 +1,4 @@
-// Web Worker para Inferência do Modelo Whisper 100% In-Browser (Client-Side)
+// Web Worker para Inferência de Reconhecimento de Voz 100% In-Browser (Client-Side)
 import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/+esm";
 
 // Configurações do ambiente
@@ -30,7 +30,7 @@ self.onmessage = async (e) => {
             isInitializing = true;
             self.postMessage({ 
                 type: "STATUS_UPDATE", 
-                payload: { status: "Carregando modelo IA no navegador...", isBusy: true } 
+                payload: { status: "Carregando modelo de IA no navegador...", isBusy: true } 
             });
 
             currentModel = modelName;

@@ -1,40 +1,42 @@
-﻿# 🎙️ Wisp Web - Transcritor de Voz IA no Navegador (Client-Side AI)
+# 🎙️ Wisp - Ditador Pessoal Privado (100% In-Browser & Local)
 
-> **Protótipo 100% Funcional da Estratégia 2**  
-> Modelo Whisper executado diretamente no navegador do usuário utilizando **WebAssembly + WebGPU** e **Transformers.js**.  
-> **Custo de Servidor: R$ 0,00 | Privacidade Absoluta: 100% Local.**
+> **Aplicativo Web e PWA de Reconhecimento de Voz por Inteligência Artificial no Navegador**  
+> Modelo de IA executado diretamente no dispositivo do usuário utilizando **WebAssembly + WebGPU** e **Transformers.js**.  
+> **Custo de Servidor: R$ 0,00 | Privacidade Absoluta: 100% Local | Conformidade Total com LGPD.**
 
 ---
 
-## 🌟 O Que é o Wisp Web?
+## 🌟 O Que é o Wisp?
 
-O **Wisp Web** é a versão web estática e independente do Wisp. Diferente de soluções convencionais de reconhecimento de voz que enviam o áudio para servidores na nuvem (Google, OpenAI, AWS), o Wisp Web executa a inteligência artificial **diretamente dentro do navegador do visitante** através da aceleração por hardware da placa de vídeo (WebGPU) ou processador (WASM SIMD).
+O **Wisp** é um ditador e transcritor de voz por inteligência artificial que executa o processamento neural **diretamente dentro do seu navegador ou celular**. Ao contrário de soluções convencionais de transcrição que enviam seu áudio para servidores na nuvem, o Wisp garante que **a sua voz nunca saia do seu computador ou smartphone**.
 
-- **Zero Custo de Servidor**: Não requer servidor Python com GPU na nuvem; roda como uma página estática (SPA).
-- **Privacidade Total**: O áudio do microfone nunca trafega pela internet nem sai da máquina do usuário.
-- **Cache Local no Navegador (IndexedDB)**: O modelo Whisper (`whisper-tiny` ~39 MB ou `whisper-base` ~75 MB) é baixado apenas no primeiro acesso e fica salvo permanentemente no cache local.
-- **Ditador & Produtividade**: Editor de texto de alta performance com estatísticas ao vivo, cópia em 1 clique e download em `.txt`.
-- **Comandos de Voz & Pontuação Inteligente**:
+- **🔒 Privacidade Total (Privacy by Design)**: O áudio capturado pelo microfone é processado na memória RAM e placa de vídeo local. Nenhum dado de áudio ou texto é enviado para servidores externos.
+- **⚡ Zero Custo de Infraestrutura**: Totalmente estático (SPA / PWA). Pode ser hospedado gratuitamente no GitHub Pages sem necessidade de backend Python ou GPUs na nuvem.
+- **📱 PWA Instalável (Progressive Web App)**: Pode ser instalado diretamente no Windows, Mac, Linux, Android e iOS com ícone dedicado na área de trabalho e execução em tela cheia.
+- **🌐 Suporte Offline**: Após o primeiro carregamento, o modelo de IA fica armazenado no cache local do navegador (IndexedDB), permitindo ditar mesmo sem conexão com a internet.
+- **🎙️ Seleção Dinâmica de Microfones**: Permite alternar instantaneamente entre o microfone do notebook, fone Bluetooth, headset USB ou webcam com detecção automática via `enumerateDevices`.
+- **🔊 Resamostragem Universal de Áudio**: Algoritmo integrado para garantir compatibilidade impecável em qualquer taxa de amostragem de hardware (44.1 kHz, 48 kHz, etc.), ideal para Safari (iPhone/iPad/Mac) e Android.
+- **✨ Comandos de Voz & Pontuação Inteligente**:
   - *"vírgula"* ➔ `,`
-  - *"ponto final"* ➔ `.`
+  - *"ponto final"* ou *"ponto"* ➔ `.`
   - *"ponto de exclamação"* ➔ `!`
   - *"ponto de interrogação"* ➔ `?`
   - *"dois pontos"* ➔ `:`
   - *"nova linha"* ou *"parágrafo"* ➔ quebra de linha
-  - *"enter"* ➔ pressiona Enter no editor
-- **Vocabulário Prioritário & Regras de Auto-Correção**: Salvas localmente no `localStorage`, com suporte a **Exportar/Importar Perfil JSON**.
-- **Avisos Sonoros (Beeps)**: Feedback sonoro suave sintetizado via Web Audio API.
+  - *"entra"* ➔ insere quebra de linha física no editor
+- **🎯 Vocabulário Prioritário & Regras de Auto-Correção**: Salvas localmente no `localStorage`, com suporte a exportar e importar perfil em formato JSON.
+- **💾 Gerenciamento de Armazenamento**: Botão em configurações para desocupar espaço e limpar o cache dos modelos baixados a qualquer momento.
 
 ---
 
 ## 🚀 Como Executar Localmente
 
 ### Opção 1: Atalho Rápido (Windows)
-Basta dar dois cliques no arquivo:
+Dê dois cliques no arquivo:
 ```cmd
 run_web.bat
 ```
-Ele iniciará o servidor local com os cabeçalhos de alto desempenho (`COOP`/`COEP`) e abrirá automaticamente seu navegador em `http://localhost:8000`.
+Ele iniciará o servidor local e abrirá automaticamente seu navegador em `http://localhost:8000`.
 
 ### Opção 2: Linha de Comando (PowerShell)
 ```powershell
@@ -43,20 +45,23 @@ Ele iniciará o servidor local com os cabeçalhos de alto desempenho (`COOP`/`CO
 
 ---
 
-## 🌐 Como Publicar Grátis na Internet (GitHub Pages ou Cloudflare Pages)
+## 🌐 Como Publicar Gratuitamente no GitHub Pages
 
-Como este projeto é **100% frontend estático (HTML, CSS e JS)**, ele não precisa de backend:
+Este repositório está pronto para ser publicado no **GitHub Pages**:
 
-### No GitHub Pages:
-1. Crie um repositório no seu GitHub (ex: `wisp-web`).
-2. Vincule este repositório local e envie os arquivos:
+1. Crie ou vincule este repositório ao seu GitHub:
    ```bash
-   git remote add origin https://github.com/SEU_USUARIO/wisp-web.git
+   git remote add origin https://github.com/Alex-salgado/Wisp.git
    git branch -M main
    git push -u origin main
    ```
-3. No GitHub, vá em **Settings > Pages > Branch: `main` / Folder: `/ (root)` > Save**.
-4. Em menos de 1 minuto, seu app estará no ar mundialmente com link HTTPS!
+2. No seu repositório no GitHub, acesse:
+   - **Settings** (Configurações) ➔ **Pages**
+   - Em **Source**, selecione **Deploy from a branch**
+   - Escolha a branch **`main`** e a pasta **`/ (root)`**
+   - Clique em **Save**
+3. Em menos de 1 minuto, seu aplicativo estará online com endereço seguro HTTPS:
+   `https://alex-salgado.github.io/Wisp/`
 
 ---
 
@@ -65,16 +70,18 @@ Como este projeto é **100% frontend estático (HTML, CSS e JS)**, ele não prec
 ```text
 Wisp_web/
 │
-├── index.html            # Estrutura semântica completa e abas
-├── style.css             # Design System moderno Dark Glass (Neon / Glassmorphism)
-├── app.js                # Orquestrador da interface, perfil e atalhos
-├── audio.js              # Captura de microfone 16kHz e VAD por energia
-├── worker.js             # Web Worker com Transformers.js (não trava a interface)
-├── server.py             # Servidor HTTP local com suporte a WebAssembly e WebGPU
-├── run_web.bat           # Executável rápido de inicialização
+├── index.html            # Estrutura semântica completa, PWA e abas da aplicação
+├── style.css             # Design System moderno Dark Glass (Glassmorphism neon)
+├── app.js                # Orquestrador da interface, perfil, PWA e atalhos
+├── audio.js              # Captura de áudio, resamostragem universal e VAD
+├── worker.js             # Web Worker de inferência de IA sem travamento da UI
+├── manifest.json         # Manifesto PWA para instalação como app nativo
+├── service-worker.js     # Cache offline de arquivos estáticos da aplicação
+├── server.py             # Servidor de desenvolvimento local com cabeçalhos CORS
+├── run_web.bat           # Inicializador de um clique para Windows
 ├── .gitignore            # Ignora .venv e arquivos temporários
 │
-├── assets/               # Ícones e identidade visual herdados do Wisp Desktop
+├── assets/               # Ícones e identidade visual em alta resolução
 │   ├── icon.ico
 │   └── icon.png
 │
@@ -85,13 +92,6 @@ Wisp_web/
 
 ---
 
-## ⚖️ Comparativo: Wisp Desktop vs. Wisp Web
+## ⚖️ Licença e Privacidade
 
-| Recurso | Wisp Desktop (Windows) | Wisp Web (Navegador) |
-| :--- | :---: | :---: |
-| **Ambiente de Execução** | Executável Windows (`.exe` nativo) | Navegador Web (Chrome, Edge, Firefox, Safari) |
-| **Injeção de Teclas no Cursor** | Digita em qualquer programa do PC (Word, Notepad, WhatsApp) | Digita no editor da página web ou via Extensão |
-| **Motor de Inferência** | Faster-Whisper (CUDA FP16 / CTranslate2) | Transformers.js (ONNX Runtime WebGPU / WASM) |
-| **Custo de Hospedagem** | Zero (Local) | **Zero (Página Estática / GitHub Pages)** |
-| **Compatibilidade** | Apenas Windows 10/11 | **Qualquer sistema (Windows, Mac, Linux, Celular)** |
-| **Backup de Perfil** | `user_profile.json` | `localStorage` + Exportação JSON |
+O **Wisp** é distribuído como software livre. Nenhuma informação pessoal, áudio ou texto gerado pelo usuário é coletado, armazenado ou compartilhado.

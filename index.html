@@ -3,8 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wisp Web - Ditador e Transcritor de Voz IA no Navegador</title>
-    <meta name="description" content="Transcritor de voz IA 100% local no navegador utilizando Whisper e WebGPU. Sem envio de dados para servidores externos.">
+    <title>Wisp - Ditador Pessoal Privado (100% Local)</title>
+    
+    <!-- Meta Tags Principais & SEO -->
+    <meta name="description" content="Ditador e transcritor de voz por IA 100% privado e local no seu navegador. Zero envio de áudio para servidores externos, funciona offline.">
+    <meta name="keywords" content="ditador de voz, transcrição de áudio, IA local, reconhecimento de voz, privacidade, ditado no navegador, speech to text, WebGPU, LGPD">
+    <meta name="author" content="Wisp">
+    <meta name="theme-color" content="#0e131f">
+
+    <!-- OpenGraph / Facebook / WhatsApp / LinkedIn -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Wisp - Ditador Pessoal Privado (100% Local)">
+    <meta property="og:description" content="Ditador e transcritor de voz por IA 100% privado e local no seu navegador. Zero envio de áudio para servidores externos.">
+    <meta property="og:image" content="assets/icon.png">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Wisp - Ditador Pessoal Privado (100% Local)">
+    <meta name="twitter:description" content="Ditador e transcritor de voz por IA 100% privado e local no seu navegador. Zero envio de áudio para servidores externos.">
+    <meta name="twitter:image" content="assets/icon.png">
+
+        <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Wisp">
     <link rel="icon" type="image/png" href="assets/icon.png">
     
     <!-- Google Fonts -->
@@ -21,8 +44,8 @@
         <div class="logo-container">
             <div class="logo-icon">🎙️</div>
             <div class="logo-text">
-                <h1>Wisp Web</h1>
-                <div class="logo-tag">In-Browser AI (Client-Side)</div>
+                <h1>Wisp</h1>
+                <div class="logo-tag">Ditador Pessoal Privado (100% Local)</div>
             </div>
         </div>
 
@@ -38,7 +61,7 @@
         <!-- Barra de Progresso de Download do Modelo -->
         <div class="progress-card" id="model-progress-card">
             <div class="progress-header">
-                <span id="progress-file-name">Baixando modelo Whisper para a memória do navegador...</span>
+                <span id="progress-file-name">Baixando modelo de inteligência artificial para a memória do navegador...</span>
                 <span id="progress-percentage">0%</span>
             </div>
             <div class="progress-bar-bg">
@@ -52,7 +75,7 @@
                 🎙️ Ditador IA
             </button>
             <button class="tab-btn" id="tab-btn-vocab" data-tab="tab-vocab">
-                📚 Vocabulário & Regras
+                📖 Vocabulário & Regras
             </button>
             <button class="tab-btn" id="tab-btn-history" data-tab="tab-history">
                 📜 Histórico de Frases
@@ -61,7 +84,7 @@
                 ⚙️ Configurações
             </button>
             <button class="tab-btn" id="tab-btn-manual" data-tab="tab-manual">
-                📖 Manual & Privacidade
+                📘 Manual & Privacidade
             </button>
         </nav>
 
@@ -93,12 +116,19 @@
                     <!-- Opções Rápidas -->
                     <div class="quick-options">
                         <div class="field-group">
-                            <label class="field-label" for="select-model">Modelo Whisper (In-Browser):</label>
+                            <label class="field-label" for="select-mic">Microfone de Entrada:</label>
+                            <select id="select-mic">
+                                <option value="">Microfone Padrão do Sistema</option>
+                            </select>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="field-label" for="select-model">Modelo de IA (In-Browser):</label>
                             <select id="select-model">
-                                <option value="Xenova/whisper-tiny" selected>Whisper Tiny (~39 MB - Ultra Rápido)</option>
-                                <option value="Xenova/whisper-base">Whisper Base (~75 MB - Equilibrado)</option>
-                                <option value="Xenova/whisper-small">Whisper Small (~150 MB - Alta Precisão)</option>
-                                <option value="Xenova/whisper-medium">Whisper Medium (~750 MB - Qualidade Máxima)</option>
+                                <option value="Xenova/whisper-tiny" selected>Modelo Compacto (~39 MB - Ultra Rápido)</option>
+                                <option value="Xenova/whisper-base">Modelo Padrão (~75 MB - Equilibrado)</option>
+                                <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Precisão)</option>
+                                <option value="Xenova/whisper-medium">Modelo Profissional (~750 MB - Máxima Qualidade)</option>
                             </select>
                         </div>
 
@@ -112,7 +142,7 @@
                         </div>
 
                         <button class="action-btn" id="btn-calibrate-noise" style="width: 100%; justify-content: center;">
-                            🎚️ Calibrar Ruído da Sala
+                            🎯 Calibrar Ruído da Sala
                         </button>
                     </div>
                 </aside>
@@ -151,14 +181,14 @@
         <!-- ABA 2: VOCABULÁRIO & REGRAS -->
         <section class="tab-content" id="tab-vocab">
             <div class="card">
-                <h3 class="card-title">📁 Vocabulário Prioritário (Hotwords)</h3>
+                <h3 class="card-title">✨ Vocabulário Prioritário (Hotwords)</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
-                    Palavras, termos técnicos e nomes próprios que o Whisper deve priorizar durante a inferência.
+                    Palavras, termos técnicos e nomes próprios que o modelo de IA deve priorizar durante a inferência.
                 </p>
 
                 <form class="inline-form" id="form-add-vocab">
                     <input type="text" id="input-new-vocab" placeholder="Ex: Wisp, Inteligência Artificial, WhatsApp" required>
-                    <button type="submit" class="action-btn primary" id="btn-add-vocab">➕ Adicionar Termo</button>
+                    <button type="submit" class="action-btn primary" id="btn-add-vocab">+ Adicionar Termo</button>
                 </form>
 
                 <div class="table-wrapper">
@@ -177,15 +207,15 @@
             </div>
 
             <div class="card">
-                <h3 class="card-title">⚙️ Regras de Auto-Correção ("Quando ouve X ➔ substitui por Y")</h3>
+                <h3 class="card-title">🔄 Regras de Auto-Correção ("Quando ouve X ➔ substitui por Y")</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
                     Corrija vícios de linguagem ou palavras frequentemente mal interpretadas pelo microfone.
                 </p>
 
                 <form class="inline-form" id="form-add-rule">
-                    <input type="text" id="input-rule-from" placeholder="Quando o Whisper entender (ex: ia)" required>
+                    <input type="text" id="input-rule-from" placeholder="Quando o modelo entender (ex: ia)" required>
                     <input type="text" id="input-rule-to" placeholder="Substituir por (ex: IA)" required>
-                    <button type="submit" class="action-btn primary" id="btn-add-rule">➕ Adicionar Regra</button>
+                    <button type="submit" class="action-btn primary" id="btn-add-rule">+ Adicionar Regra</button>
                 </form>
 
                 <div class="table-wrapper">
@@ -236,7 +266,7 @@
         <!-- ABA 4: CONFIGURAÇÕES -->
         <section class="tab-content" id="tab-settings">
             <div class="card">
-                <h3 class="card-title">🎛️ Parâmetros de Captura & Áudio</h3>
+                <h3 class="card-title">⚙️ Parâmetros de Captura & Áudio</h3>
 
                 <div class="toggle-row">
                     <div class="toggle-info">
@@ -298,15 +328,28 @@
 
                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                     <button class="action-btn primary" id="btn-export-profile">
-                        💾 Exportar Perfil Completo (.json)
+                        📤 Exportar Perfil Completo (.json)
                     </button>
                     <label class="action-btn" for="input-import-profile" style="cursor: pointer;">
-                        📂 Importar Perfil (.json)
+                        📥 Importar Perfil (.json)
                         <input type="file" id="input-import-profile" accept=".json" style="display: none;">
                     </label>
                     <button class="action-btn danger" id="btn-reset-profile">
                         🔄 Restaurar Padrões de Fábrica
                     </button>
+                </div>
+            </div>
+                    <div class="card">
+                <h3 class="card-title">💾 Armazenamento & Cache dos Modelos de IA</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
+                    Os modelos de IA ficam salvos localmente na memória e no cache do navegador (IndexedDB) para carregarem instantaneamente e funcionarem offline. Se desejar desocupar espaço no disco, você pode limpar esse cache a qualquer momento.
+                </p>
+
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <button class="action-btn danger" id="btn-clear-model-cache">
+                        🗑️ Liberar Cache de Modelos IA
+                    </button>
+                    <span id="label-cache-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
                 </div>
             </div>
         </section>
@@ -319,15 +362,15 @@
                     🔒 Privacidade Absoluta & Segurança Total (In-Browser AI)
                 </h3>
                 <p style="font-size: 1.05rem; line-height: 1.7; color: #e2e8f0; margin-bottom: 16px;">
-                    O <strong>Wisp Web</strong> é construído sob a premissa de <strong>Privacidade por Design (Privacy by Design)</strong>.
-                    Diferente da maioria das soluções de transcrição de voz da internet, <strong>aqui sua voz NUNCA sai do seu computador</strong>.
+                    O <strong>Wisp</strong> é construído sob a premissa de <strong>Privacidade por Design (Privacy by Design)</strong>.
+                    Diferente da maioria das soluções de transcrição de voz da internet, <strong>aqui sua voz NUNCA sai do seu dispositivo</strong>.
                 </p>
                 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px;">
                     <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
                         <h4 style="color: #6ee7b7; margin-bottom: 8px;">💻 100% Processamento Local</h4>
                         <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
-                            O modelo Whisper roda diretamente na memória RAM e na placa de vídeo (WebGPU) do seu navegador. Zero envio de áudio para servidores externos.
+                            O modelo de IA roda diretamente na memória RAM e na placa de vídeo (WebGPU) do seu navegador. Zero envio de áudio para servidores externos.
                         </p>
                     </div>
 
@@ -339,7 +382,7 @@
                     </div>
 
                     <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
-                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">✈️ Funciona 100% Offline</h4>
+                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">🌐 Funciona 100% Offline</h4>
                         <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
                             Após baixar o modelo pela primeira vez para o cache do seu navegador (IndexedDB), você pode até desligar a internet que a transcrição continuará funcionando perfeitamente!
                         </p>
@@ -356,7 +399,7 @@
 
             <!-- Guia de Uso Rápido -->
             <div class="card">
-                <h3 class="card-title">🚀 Guia Rápido de Uso</h3>
+                <h3 class="card-title">📖 Guia Rápido de Uso</h3>
                 <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
                     <div style="display: flex; gap: 14px; align-items: flex-start;">
                         <span style="background: var(--primary); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">1</span>
@@ -392,9 +435,9 @@
 
             <!-- Tabela Completa de Comandos de Voz -->
             <div class="card">
-                <h3 class="card-title">🗣️ Tabela de Comandos de Voz Disponíveis</h3>
+                <h3 class="card-title">🎙️ Tabela de Comandos de Voz Disponíveis</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
-                    Você pode ditar pontuações e comandos a qualquer momento. O Whisper continuará inserindo pontuações automáticas normalmente pela entonação da sua voz.
+                    Você pode ditar pontuações e comandos a qualquer momento. O sistema continuará inserindo pontuações automáticas normalmente pela entonação da sua voz.
                 </p>
 
                 <div class="table-wrapper">
@@ -457,26 +500,26 @@
                 <h3 class="card-title">💡 Dicas para Máxima Precisão</h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 10px;">
                     <div>
-                        <h4 style="color: #93c5fd; margin-bottom: 6px;">🎯 Escolha do Modelo Whisper</h4>
+                        <h4 style="color: #93c5fd; margin-bottom: 6px;">🧠 Escolha do Modelo de IA</h4>
                         <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
-                            • <strong>Tiny (~39 MB)</strong>: Recomendado para computadores comuns ou celulares; respostas instantâneas.<br>
-                            • <strong>Base (~75 MB)</strong>: Equilíbrio ideal entre velocidade e vocabulário.<br>
-                            • <strong>Small (~150 MB)</strong>: Alta fidelidade para textos longos e palavras técnicas.<br>
-                            • <strong>Medium (~750 MB)</strong>: Máxima precisão de estúdio para quem possui placa de vídeo (GPU) potente.
+                            • <strong>Modelo Compacto (~39 MB)</strong>: Recomendado para computadores comuns ou celulares; respostas instantâneas.<br>
+                            • <strong>Modelo Padrão (~75 MB)</strong>: Equilíbrio ideal entre velocidade e vocabulário.<br>
+                            • <strong>Modelo Avançado (~150 MB)</strong>: Alta fidelidade para textos longos e palavras técnicas.<br>
+                            • <strong>Modelo Profissional (~750 MB)</strong>: Máxima precisão de estúdio para quem possui placa de vídeo (GPU) potente.
                         </p>
                     </div>
 
                     <div>
-                        <h4 style="color: #93c5fd; margin-bottom: 6px;">🎙️ Calibração de Ruído</h4>
+                        <h4 style="color: #93c5fd; margin-bottom: 6px;">🎯 Calibração de Ruído</h4>
                         <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
                             Antes de começar uma sessão de gravação, clique no botão <strong>"Calibrar Ruído da Sala"</strong> na barra lateral e fique em silêncio por 2 segundos. O sistema ajusta a sensibilidade do microfone automaticamente ao barulho do seu ambiente.
                         </p>
                     </div>
 
                     <div>
-                        <h4 style="color: #93c5fd; margin-bottom: 6px;">📚 Vocabulário Personalizado</h4>
+                        <h4 style="color: #93c5fd; margin-bottom: 6px;">✨ Vocabulário Personalizado</h4>
                         <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
-                            Se você costuma usar termos da sua profissão, nomes de pessoas ou jargões técnicos, adicione-os na aba <strong>"Vocabulário & Regras"</strong>. O Whisper priorizará esses termos automaticamente durante a transcrição!
+                            Se você costuma usar termos da sua profissão, nomes de pessoas ou jargões técnicos, adicione-os na aba <strong>"Vocabulário & Regras"</strong>. O modelo de IA priorizará esses termos automaticamente durante a transcrição!
                         </p>
                     </div>
                 </div>

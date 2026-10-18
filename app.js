@@ -1,11 +1,21 @@
+// Registro do Service Worker (PWA Offline)
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js")
+            .then(reg => console.log("[WispWeb] Service Worker ativo:", reg.scope))
+            .catch(err => console.warn("[WispWeb] Aviso no Service Worker:", err));
+    });
+}
+
 /**
- * WISP WEB - CONTROLADOR PRINCIPAL (V2)
- * Gerencia a interface, perfil do usuario, audio e worker de IA
+ * WISP WEB - CONTROLADOR PRINCIPAL (V3)
+ * Ditador Pessoal Privado 100% In-Browser
+ * Gerencia a interface, perfil do usuário, áudio, microfones e worker de IA
  */
 
 import { AudioManager } from "./audio.js";
 
-// Configuracoes e Dados Padrao com exatamente 3 itens de teste selecionados
+// Configurações e Dados Padrão (Sem referências ao Whisper)
 const DEFAULT_PROFILE = {
     custom_vocabulary: [
         "Wisp",
@@ -14,8 +24,8 @@ const DEFAULT_PROFILE = {
     ],
     correction_rules: {
         "ia": "IA",
-        "wisper": "Whisper",
-        "vc": "você"
+        "vc": "você",
+        "obg": "obrigado"
     },
     phrase_history: [],
     settings: {
@@ -25,13 +35,16 @@ const DEFAULT_PROFILE = {
         voicePunctuation: true,
         voiceEnter: true,
         pauseDuration: 0.75,
-        silenceThreshold: 0.015
+        silenceThreshold: 0.015,
+        selectedMicId: ""
     }
 };
 
+const PROFILE_STORAGE_KEY = "wisp_user_profile_v3";
+
 class WispWebApp {
     constructor() {
-        console.log("[WispWeb] Inicializando aplicacao...");
+        console.log("[WispWeb] Inicializando Ditador Pessoal Privado...");
         this.profile = this.loadProfile();
         this.audioManager = new AudioManager();
         this.worker = null;
@@ -44,13 +57,13 @@ class WispWebApp {
         this.initAudioControls();
         this.initProfileManager();
         this.renderAll();
-        console.log("[WispWeb] Aplicacao inicializada com sucesso!");
+        console.log("[WispWeb] Aplicativo pronto para uso!");
     }
 
-    // Carregar Perfil do localStorage (Chave V2 para garantir os 3 itens de teste padrao)
+    // Carregar Perfil do localStorage
     loadProfile() {
         try {
-            const saved = localStorage.getItem("wisp_user_profile_v2");
+            const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
             if (saved) {
                 const parsed = JSON.parse(saved);
                 return {
@@ -68,13 +81,13 @@ class WispWebApp {
 
     saveProfile() {
         try {
-            localStorage.setItem("wisp_user_profile_v2", JSON.stringify(this.profile));
+            localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(this.profile));
         } catch (e) {
             console.error("Erro ao salvar perfil no localStorage:", e);
         }
     }
 
-    // Inicializacao do DOM
+    // Inicialização do DOM
     initDOM() {
         this.elements = {
             // Header
@@ -91,6 +104,7 @@ class WispWebApp {
             micStatusLabel: document.getElementById("mic-status-label"),
             micStatusSub: document.getElementById("mic-status-sub"),
             vuBarFill: document.getElementById("vu-bar-fill"),
+            selectMic: document.getElementById("select-mic"),
             selectModel: document.getElementById("select-model"),
             selectLanguage: document.getElementById("select-language"),
             btnCalibrateNoise: document.getElementById("btn-calibrate-noise"),
@@ -104,7 +118,7 @@ class WispWebApp {
             statCharCount: document.getElementById("stat-char-count"),
             statLatency: document.getElementById("stat-latency"),
 
-            // Vocabulario & Regras
+            // Vocabulário & Regras
             formAddVocab: document.getElementById("form-add-vocab"),
             inputNewVocab: document.getElementById("input-new-vocab"),
             tbodyVocab: document.getElementById("tbody-vocab"),
@@ -113,12 +127,12 @@ class WispWebApp {
             inputRuleTo: document.getElementById("input-rule-to"),
             tbodyRules: document.getElementById("tbody-rules"),
 
-            // Historico
+            // Histórico
             tbodyHistory: document.getElementById("tbody-history"),
             btnCopyHistory: document.getElementById("btn-copy-history"),
             btnClearHistory: document.getElementById("btn-clear-history"),
 
-            // Configuracoes
+            // Configurações
             settingSoundFeedback: document.getElementById("setting-sound-feedback"),
             settingVoicePunctuation: document.getElementById("setting-voice-punctuation"),
             settingVoiceEnter: document.getElementById("setting-voice-enter"),
@@ -129,11 +143,13 @@ class WispWebApp {
             btnExportProfile: document.getElementById("btn-export-profile"),
             inputImportProfile: document.getElementById("input-import-profile"),
             btnResetProfile: document.getElementById("btn-reset-profile"),
-            toastContainer: document.getElementById("toast-container")
+            toastContainer: document.getElementById("toast-container"),
+            btnClearModelCache: document.getElementById("btn-clear-model-cache"),
+            labelCacheStatus: document.getElementById("label-cache-status")
         };
     }
 
-    // Inicializacao do Web Worker de IA
+    // Inicialização do Web Worker de IA
     initWorker() {
         try {
             console.log("[WispWeb] Inicializando Worker de IA...");
@@ -142,7 +158,7 @@ class WispWebApp {
             this.worker.onerror = (err) => {
                 console.error("[WispWeb] Erro no Worker de IA:", err);
                 this.updateSystemStatus("Erro no Worker IA", false, true);
-                this.showToast("Falha ao carregar motor de IA no navegador. Verifique a conexao.", "error");
+                this.showToast("Falha ao carregar motor de IA no navegador. Verifique a conexão.", "error");
             };
 
             this.worker.onmessage = (e) => {
@@ -161,7 +177,7 @@ class WispWebApp {
                         this.isModelReady = true;
                         this.elements.progressCard.style.display = "none";
                         this.updateSystemStatus("Modelo pronto", false);
-                        this.showToast(`Modelo '${payload.modelName}' pronto para uso local!`);
+                        this.showToast("Modelo de IA pronto para uso local!");
                         break;
 
                     case "TRANSCRIBE_SUCCESS":
@@ -175,12 +191,12 @@ class WispWebApp {
                 }
             };
 
-            // Solicita carregamento do modelo padrao salvo
+            // Solicita carregamento do modelo padrão salvo
             this.loadSelectedModel();
         } catch (err) {
             console.error("[WispWeb] Falha ao instanciar Worker:", err);
-            this.updateSystemStatus("Erro de Inicializacao", false, true);
-            this.showToast("Navegador bloqueou execucao do Worker de IA.", "error");
+            this.updateSystemStatus("Erro de Inicialização", false, true);
+            this.showToast("Navegador bloqueou execução do Worker de IA.", "error");
         }
     }
 
@@ -189,7 +205,7 @@ class WispWebApp {
         this.elements.progressCard.style.display = "block";
         this.elements.progressBarFill.style.width = "0%";
         this.elements.progressPercentage.textContent = "0%";
-        this.elements.progressFileName.textContent = `Carregando ${this.profile.settings.modelName}...`;
+        this.elements.progressFileName.textContent = "Preparando modelo de IA no navegador...";
 
         this.worker.postMessage({
             type: "LOAD_MODEL",
@@ -203,7 +219,7 @@ class WispWebApp {
             this.elements.progressBarFill.style.width = `${pct}%`;
             this.elements.progressPercentage.textContent = `${pct}%`;
             if (data.file) {
-                this.elements.progressFileName.textContent = `Baixando: ${data.file} (${pct}%)`;
+                this.elements.progressFileName.textContent = `Baixando modelo: ${pct}% concluído`;
             }
         } else if (data.status === "done") {
             this.elements.progressBarFill.style.width = "100%";
@@ -222,7 +238,7 @@ class WispWebApp {
         }
     }
 
-    // Navegacao por Abas
+    // Navegação por Abas
     initTabs() {
         const tabBtns = document.querySelectorAll(".tab-btn");
         const tabContents = document.querySelectorAll(".tab-content");
@@ -240,11 +256,74 @@ class WispWebApp {
         });
     }
 
-    // Controles de Audio e Microfone
+    // Lista os dispositivos de entrada de microfone disponíveis
+    async populateMicrophoneList() {
+        const select = this.elements.selectMic;
+        if (!select || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(d => d.kind === "audioinput");
+
+            const previousSelection = this.profile.settings.selectedMicId || "";
+            select.innerHTML = '<option value="">Microfone Padrão do Sistema</option>';
+
+            let foundPrevious = false;
+            audioInputs.forEach((device, index) => {
+                const opt = document.createElement("option");
+                opt.value = device.deviceId;
+                opt.textContent = device.label || `Microfone ${index + 1}`;
+                if (device.deviceId && device.deviceId === previousSelection) {
+                    opt.selected = true;
+                    foundPrevious = true;
+                }
+                select.appendChild(opt);
+            });
+
+            if (!foundPrevious && previousSelection) {
+                this.profile.settings.selectedMicId = "";
+                this.saveProfile();
+            }
+        } catch (err) {
+            console.warn("Não foi possível listar os microfones:", err);
+        }
+    }
+
+    // Controles de Áudio e Microfone
     initAudioControls() {
         this.elements.btnToggleMic.addEventListener("click", () => this.toggleMicrophone());
 
-        // Mudanca de modelo
+        // Carregar lista inicial de microfones
+        this.populateMicrophoneList();
+        if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+            navigator.mediaDevices.addEventListener("devicechange", () => this.populateMicrophoneList());
+        }
+
+        // Troca de microfone pelo dropdown
+        if (this.elements.selectMic) {
+            this.elements.selectMic.addEventListener("change", async (e) => {
+                this.profile.settings.selectedMicId = e.target.value;
+                this.saveProfile();
+                this.showToast("Dispositivo de microfone atualizado!");
+
+                if (this.audioManager.isActive) {
+                    this.audioManager.stop();
+                    try {
+                        await this.audioManager.start(
+                            (audioFloat32, durationSec) => this.onSpeechChunkCaptured(audioFloat32, durationSec),
+                            (level) => { this.elements.vuBarFill.style.width = `${level}%`; },
+                            this.profile.settings.selectedMicId
+                        );
+                        this.showToast("Microfone reconectado no novo dispositivo.");
+                    } catch (err) {
+                        this.showToast("Erro ao trocar microfone: " + err.message, "error");
+                        this.updateMicUiState(false);
+                    }
+                }
+            });
+        }
+
+        // Mudança de modelo de IA
         this.elements.selectModel.value = this.profile.settings.modelName;
         this.elements.selectModel.addEventListener("change", (e) => {
             this.profile.settings.modelName = e.target.value;
@@ -259,13 +338,13 @@ class WispWebApp {
             this.saveProfile();
         });
 
-        // Calibracao de Ruido
+        // Calibração de Ruído
         this.elements.btnCalibrateNoise.addEventListener("click", async () => {
             this.elements.btnCalibrateNoise.disabled = true;
-            this.elements.btnCalibrateNoise.textContent = "Medindo silencio da sala (2s)...";
-            this.showToast("Fique em silencio por 2 segundos...", "info");
+            this.elements.btnCalibrateNoise.textContent = "Medindo silêncio da sala (2s)...";
+            this.showToast("Fique em silêncio por 2 segundos...", "info");
 
-            const newThreshold = await this.audioManager.calibrateNoise(2.0);
+            const newThreshold = await this.audioManager.calibrateNoise(2.0, this.profile.settings.selectedMicId);
             this.profile.settings.silenceThreshold = Number(newThreshold.toFixed(4));
             this.audioManager.silenceThreshold = this.profile.settings.silenceThreshold;
             this.elements.settingSilenceThreshold.value = this.profile.settings.silenceThreshold;
@@ -273,21 +352,21 @@ class WispWebApp {
             this.saveProfile();
 
             this.elements.btnCalibrateNoise.disabled = false;
-            this.elements.btnCalibrateNoise.textContent = "🎚️ Calibrar Ruido da Sala";
+            this.elements.btnCalibrateNoise.textContent = "🎯 Calibrar Ruído da Sala";
             this.showToast(`Sensibilidade calibrada para ${this.profile.settings.silenceThreshold}!`);
         });
 
-        // Acoes do Editor
+        // Ações do Editor
         this.elements.editor.addEventListener("input", () => this.updateEditorStats());
 
         this.elements.btnCopyText.addEventListener("click", () => {
             const text = this.elements.editor.value;
             if (!text.trim()) {
-                this.showToast("O editor esta vazio!", "info");
+                this.showToast("O editor está vazio!", "info");
                 return;
             }
             navigator.clipboard.writeText(text);
-            this.showToast("Texto copiado para a Area de Transferencia!");
+            this.showToast("Texto copiado para a Área de Transferência!");
         });
 
         this.elements.btnDownloadTxt.addEventListener("click", () => {
@@ -315,18 +394,30 @@ class WispWebApp {
         });
     }
 
-    async toggleMicrophone() {
-        if (this.audioManager.isActive) {
-            this.audioManager.stop();
+    updateMicUiState(isActive) {
+        if (isActive) {
+            this.elements.btnToggleMic.classList.add("active");
+            this.elements.micStatusLabel.textContent = "Ouvindo sua voz...";
+            this.elements.micStatusSub.textContent = "Fale normalmente";
+            this.playChime(true);
+            this.updateSystemStatus("Ouvindo...", true);
+        } else {
             this.elements.btnToggleMic.classList.remove("active");
             this.elements.micStatusLabel.textContent = "Microfone Desligado";
             this.elements.micStatusSub.textContent = "Clique para ligar a escuta";
             this.elements.vuBarFill.style.width = "0%";
             this.playChime(false);
             this.updateSystemStatus("Pronto", false);
+        }
+    }
+
+    async toggleMicrophone() {
+        if (this.audioManager.isActive) {
+            this.audioManager.stop();
+            this.updateMicUiState(false);
         } else {
             if (!this.isModelReady) {
-                this.showToast("Aguarde o modelo Whisper terminar de carregar...", "info");
+                this.showToast("Aguarde o modelo de IA terminar de carregar...", "info");
                 return;
             }
 
@@ -338,22 +429,22 @@ class WispWebApp {
                     (audioFloat32, durationSec) => this.onSpeechChunkCaptured(audioFloat32, durationSec),
                     (level) => {
                         this.elements.vuBarFill.style.width = `${level}%`;
-                    }
+                    },
+                    this.profile.settings.selectedMicId
                 );
 
-                this.elements.btnToggleMic.classList.add("active");
-                this.elements.micStatusLabel.textContent = "Ouvindo sua voz...";
-                this.elements.micStatusSub.textContent = "Fale normalmente";
-                this.playChime(true);
-                this.updateSystemStatus("Ouvindo...", true);
+                this.updateMicUiState(true);
+
+                // Permissão concedida: atualiza nomes reais dos dispositivos no dropdown
+                this.populateMicrophoneList();
             } catch (err) {
                 console.error("Erro ao acessar microfone:", err);
-                this.showToast("Permissao de microfone negada ou indisponivel!", "error");
+                this.showToast("Permissão de microfone negada ou indisponível!", "error");
             }
         }
     }
 
-    // Quando um trecho de audio completo e capturado pelo VAD
+    // Quando um trecho de áudio completo é capturado pelo VAD
     onSpeechChunkCaptured(audioFloat32, durationSec) {
         if (!this.isModelReady) return;
 
@@ -370,21 +461,21 @@ class WispWebApp {
         });
     }
 
-    // Tratamento do resultado da transcricao
+    // Tratamento do resultado da transcrição
     handleTranscriptionSuccess(payload) {
         const { rawText, latency } = payload;
         if (!rawText || !rawText.trim()) return;
 
         this.elements.statLatency.textContent = `${latency} ms`;
 
-        // 1. Aplicar regras de auto-correcao
+        // 1. Aplicar regras de auto-correção
         let processed = rawText.trim();
         for (const [from, to] of Object.entries(this.profile.correction_rules)) {
             const regex = new RegExp(`\\b${from}\\b`, "gi");
             processed = processed.replace(regex, to);
         }
 
-        // 2. Processar comando de voz "Entra" (substitui Enter conforme requisitado)
+        // 2. Processar comando de voz "Entra"
         let pressEnterAfter = false;
         let pressEnterBefore = false;
 
@@ -397,33 +488,33 @@ class WispWebApp {
                 return;
             }
 
-            // Caso 2: Falou "entra" no final da frase
-            if (/\bentra[\.!\?]?$/i.test(lower)) {
-                processed = processed.replace(/\bentra[\.!\?]?$/i, "").trim();
+            // Caso 2: Falou "entra" no final ou início da frase
+            if (/\bentra[.!·?]?$/i.test(lower)) {
+                processed = processed.replace(/\bentra[.!·?]?$/i, "").trim();
                 pressEnterAfter = true;
-            } else if (/^entra\b[:,\s]*/i.test(lower)) {
-                processed = processed.replace(/^entra\b[:,\s]*/i, "").trim();
+            } else if (/^entra\b[:, \t]*/i.test(lower)) {
+                processed = processed.replace(/^entra\b[:, \t]*/i, "").trim();
                 pressEnterBefore = true;
             }
         }
 
-        // 3. Processar comandos explicitos de pontuacao por voz
+        // 3. Processar comandos explícitos de pontuação por voz
         if (this.profile.settings.voicePunctuation) {
             const rules = [
-                [/\b(ponto de exclama[çc][aã]o|exclama[çc][aã]o)\b/gi, "!"],
-                [/\b(ponto de interroga[çc][aã]o|interroga[çc][aã]o)\b/gi, "?"],
-                [/\bponto e v[ií]rgula\b/gi, ";"],
+                [/\b(ponto de exclamação|exclamação)\b/gi, "!"],
+                [/\b(ponto de interrogação|interrogação)\b/gi, "?"],
+                [/\bponto e vírgula\b/gi, ";"],
                 [/\bdois pontos\b/gi, ":"],
                 [/\bponto final\b/gi, "."],
-                [/\bv[ií]rgula\b/gi, ","],
-                [/\b(nova linha|par[aá]grafo)\b/gi, "\n"]
+                [/\bvírgula\b/gi, ","],
+                [/\b(nova linha|parágrafo)\b/gi, "\n"]
             ];
 
             for (const [pattern, symbol] of rules) {
                 processed = processed.replace(pattern, symbol);
             }
 
-            // Ajustar espacamento de pontuacao
+            // Ajustar espaçamento de pontuação
             processed = processed.replace(/\s+([,.:;!?])/g, "$1");
             processed = processed.replace(/([,.:;!?])([A-Za-zÀ-ÿ0-9])/g, "$1 $2");
         }
@@ -442,7 +533,7 @@ class WispWebApp {
         }
     }
 
-    // Insercao inteligente de texto no cursor do editor
+    // Inserção inteligente de texto no cursor do editor
     injectTextIntoEditor(text) {
         const editor = this.elements.editor;
         const start = editor.selectionStart;
@@ -452,16 +543,23 @@ class WispWebApp {
         editor.value = currentVal.substring(0, start) + text + currentVal.substring(end);
         editor.selectionStart = editor.selectionEnd = start + text.length;
         editor.focus();
+        editor.scrollTop = editor.scrollHeight; // Auto-scroll dinâmico
         this.updateEditorStats();
     }
 
     updateEditorStats() {
-        const text = this.elements.editor.value.trim();
-        const words = text ? text.split(/\s+/).length : 0;
-        const chars = text.length;
+        const fullText = this.elements.editor.value;
+        const trimmed = fullText.trim();
+        
+        // Divide por espaços em branco para contar palavras reais
+        const words = trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0;
+        
+        // Contagem de caracteres: total (com espaços) e contagem sem espaços
+        const charsTotal = fullText.length;
+        const charsNoSpaces = fullText.replace(/\s/g, "").length;
 
         this.elements.statWordCount.textContent = words;
-        this.elements.statCharCount.textContent = chars;
+        this.elements.statCharCount.textContent = `${charsTotal} (${charsNoSpaces} sem espaços)`;
     }
 
     recordHistory(phrase) {
@@ -510,9 +608,9 @@ class WispWebApp {
         }
     }
 
-    // Gerenciamento de Perfil e Configuracoes
+    // Gerenciamento de Perfil e Configurações
     initProfileManager() {
-        // Form Vocabulario
+        // Form Vocabulário
         this.elements.formAddVocab.addEventListener("submit", (e) => {
             e.preventDefault();
             const val = this.elements.inputNewVocab.value.trim();
@@ -540,7 +638,7 @@ class WispWebApp {
             }
         });
 
-        // Configuracoes Toggles & Sliders
+        // Configurações Toggles & Sliders
         this.elements.settingSoundFeedback.checked = this.profile.settings.soundFeedback;
         this.elements.settingSoundFeedback.addEventListener("change", (e) => {
             this.profile.settings.soundFeedback = e.target.checked;
@@ -577,23 +675,23 @@ class WispWebApp {
             this.saveProfile();
         });
 
-        // Acoes de Historico
+        // Ações de Histórico
         this.elements.btnCopyHistory.addEventListener("click", () => {
             const lines = this.profile.phrase_history.map(item => `[${item.time}] ${item.text}`).join("\n");
             if (!lines) {
-                this.showToast("Historico vazio!", "info");
+                this.showToast("Histórico vazio!", "info");
                 return;
             }
             navigator.clipboard.writeText(lines);
-            this.showToast("Todo o historico copiado!");
+            this.showToast("Todo o histórico copiado!");
         });
 
         this.elements.btnClearHistory.addEventListener("click", () => {
-            if (this.profile.phrase_history.length && confirm("Limpar todo o historico de falas?")) {
+            if (this.profile.phrase_history.length && confirm("Limpar todo o histórico de falas?")) {
                 this.profile.phrase_history = [];
                 this.saveProfile();
                 this.renderHistoryTable();
-                this.showToast("Historico limpo.");
+                this.showToast("Histórico limpo.");
             }
         });
 
@@ -624,22 +722,26 @@ class WispWebApp {
                         this.renderAll();
                         this.showToast("Perfil importado com sucesso!");
                     } else {
-                        throw new Error("Formato invalido");
+                        throw new Error("Formato inválido");
                     }
                 } catch (err) {
-                    this.showToast("Arquivo JSON de perfil invalido!", "error");
+                    this.showToast("Arquivo JSON de perfil inválido!", "error");
                 }
             };
             reader.readAsText(file);
             e.target.value = "";
         });
 
+        if (this.elements.btnClearModelCache) {
+            this.elements.btnClearModelCache.addEventListener("click", () => this.clearModelCache());
+        }
+
         this.elements.btnResetProfile.addEventListener("click", () => {
-            if (confirm("Deseja restaurar as configuracoes e vocabulario para os padroes de fabrica?")) {
+            if (confirm("Deseja restaurar as configurações e vocabulário para os padrões de fábrica?")) {
                 this.profile = JSON.parse(JSON.stringify(DEFAULT_PROFILE));
                 this.saveProfile();
                 this.renderAll();
-                this.showToast("Perfil restaurado aos padroes (3 itens de teste)!");
+                this.showToast("Perfil restaurado aos padrões (3 itens de teste)!");
             }
         });
     }
@@ -724,7 +826,7 @@ class WispWebApp {
         tbody.innerHTML = "";
 
         if (this.profile.phrase_history.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Nenhuma transcricao recente registrada.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Nenhuma transcrição recente registrada.</td></tr>`;
             return;
         }
 
@@ -763,6 +865,48 @@ class WispWebApp {
         });
     }
 
+    async clearModelCache() {
+        if (!confirm("Deseja realmente apagar os modelos de IA salvos no cache do navegador?\n\nIsso liberará espaço em disco. O próximo uso do gravador fará o download do modelo novamente.")) {
+            return;
+        }
+
+        try {
+            let deletedCount = 0;
+            // 1. Limpa Cache API do navegador
+            if ("caches" in window) {
+                const keys = await window.caches.keys();
+                for (const key of keys) {
+                    if (key.includes("transformers") || key.includes("onnx") || key.includes("wisp")) {
+                        await window.caches.delete(key);
+                        deletedCount++;
+                    }
+                }
+            }
+
+            // 2. Limpa bancos IndexedDB gerados pelo Transformers.js / ONNX Runtime
+            if (window.indexedDB && window.indexedDB.databases) {
+                try {
+                    const dbs = await window.indexedDB.databases();
+                    for (const db of dbs) {
+                        if (db.name && (db.name.includes("transformers") || db.name.includes("onnx"))) {
+                            window.indexedDB.deleteDatabase(db.name);
+                            deletedCount++;
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            this.showToast("Cache de modelos IA liberado com sucesso!", "success");
+            if (this.elements.labelCacheStatus) {
+                this.elements.labelCacheStatus.textContent = "Cache liberado. O próximo uso baixará o modelo novamente.";
+                this.elements.labelCacheStatus.style.color = "var(--accent-green)";
+            }
+        } catch (err) {
+            console.error("Erro ao limpar cache:", err);
+            this.showToast("Erro ao limpar cache: " + err.message, "error");
+        }
+    }
+
     showToast(message, type = "success") {
         const container = this.elements.toastContainer;
         if (!container) return;
@@ -782,7 +926,7 @@ class WispWebApp {
     }
 }
 
-// Inicializacao robusta para scripts com type="module"
+// Inicialização robusta para scripts com type="module"
 function bootApp() {
     if (!window.wispApp) {
         window.wispApp = new WispWebApp();
