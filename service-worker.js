@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wisp-pwa-v1';
+const CACHE_NAME = 'wisp-pwa-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

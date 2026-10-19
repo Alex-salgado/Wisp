@@ -72,19 +72,22 @@
         <!-- Barra de Navegação por Abas -->
         <nav class="tabs-nav" aria-label="Navegação do aplicativo">
             <button class="tab-btn active" id="tab-btn-dictator" data-tab="tab-dictator">
-                🎙️ Ditador IA
+                🎙️ Ditador
+            </button>
+            <button class="tab-btn" id="tab-btn-long-audio" data-tab="tab-long-audio">
+                📁 Gravar & Arquivo
             </button>
             <button class="tab-btn" id="tab-btn-vocab" data-tab="tab-vocab">
-                📖 Vocabulário & Regras
+                📖 Vocabulário
             </button>
             <button class="tab-btn" id="tab-btn-history" data-tab="tab-history">
-                📜 Histórico de Frases
+                📜 Histórico
             </button>
             <button class="tab-btn" id="tab-btn-settings" data-tab="tab-settings">
                 ⚙️ Configurações
             </button>
             <button class="tab-btn" id="tab-btn-manual" data-tab="tab-manual">
-                📘 Manual & Privacidade
+                📘 Manual
             </button>
         </nav>
 
@@ -158,9 +161,8 @@
                             <label class="field-label" for="select-model">Modelo de IA (In-Browser):</label>
                             <select id="select-model">
                                 <option value="Xenova/whisper-tiny">Modelo Compacto (~39 MB - Ultra Rápido)</option>
-                                <option value="Xenova/whisper-base" selected>Modelo Padrão (~75 MB - Equilibrado)</option>
-                                <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Precisão)</option>
-                                <option value="Xenova/whisper-medium">Modelo Profissional (~750 MB - Máxima Qualidade)</option>
+                                <option value="Xenova/whisper-base" selected>Modelo Padrão (~75 MB - Equilibrado - Recomendado)</option>
+                                <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Fidelidade e Precisão)</option>
                             </select>
                         </div>
 
@@ -181,6 +183,162 @@
 
             </div>
         </section>
+
+                <!-- ABA: ÁUDIO LONGO & ARQUIVOS -->
+        <section class="tab-content" id="tab-long-audio">
+            
+            <!-- Seletor de Modo (Gravar vs Importar) -->
+            <div class="long-audio-mode-selector">
+                <button type="button" class="mode-select-btn active" id="btn-mode-record">
+                    🎙️ Gravar Reunião / Áudio Longo
+                </button>
+                <button type="button" class="mode-select-btn" id="btn-mode-upload">
+                    📁 Importar Arquivo de Áudio (.mp3, .wav, .m4a)
+                </button>
+            </div>
+
+            <!-- PAINEL 1: GRAVADOR CONTÍNUO AO VIVO -->
+            <div class="card" id="panel-long-record">
+                <div class="long-record-header">
+                    <div class="record-badge" id="long-record-badge">
+                        <span class="record-pulse-dot" id="long-record-dot"></span>
+                        <span id="long-record-status-text">Pronto para iniciar gravação</span>
+                    </div>
+                    <div class="long-timer" id="long-record-timer">00:00:00</div>
+                </div>
+
+                <!-- Medidor de Nível VU para Gravação Longa -->
+                <div class="vu-meter-container" style="max-width: 480px; margin: 12px auto;">
+                    <div class="vu-label">Nível de Captação da Voz</div>
+                    <div class="vu-bar-bg">
+                        <div class="vu-bar-fill" id="long-vu-bar-fill"></div>
+                    </div>
+                </div>
+
+                <!-- Botões de Controle da Gravação -->
+                <div class="long-record-controls">
+                    <button class="action-btn primary large-btn" id="btn-long-start">
+                        🔴 Iniciar Gravação
+                    </button>
+                    <button class="action-btn large-btn" id="btn-long-pause" style="display: none;">
+                        ⏸️ Pausar
+                    </button>
+                    <button class="action-btn success large-btn" id="btn-long-finish" style="display: none;">
+                        ⏹️ Concluir Gravação
+                    </button>
+                    <button class="action-btn danger" id="btn-long-discard" style="display: none;">
+                        🗑️ Descartar
+                    </button>
+                </div>
+            </div>
+
+            <!-- PAINEL 2: IMPORTAÇÃO DE ARQUIVO DE ÁUDIO (DRAG & DROP) -->
+            <div class="card" id="panel-long-upload" style="display: none;">
+                <div class="dropzone" id="audio-dropzone">
+                    <input type="file" id="input-audio-file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac" style="display: none;">
+                    <div class="dropzone-icon">📥</div>
+                    <h4 class="dropzone-title">Arraste seu arquivo de áudio aqui ou clique para selecionar</h4>
+                    <p class="dropzone-sub">Formatos suportados: MP3, WAV, M4A, AAC, OGG, WEBM, FLAC (sem envio para nuvem, processado 100% no navegador)</p>
+                </div>
+            </div>
+
+            <!-- PAINEL 3: PRÉ-VISUALIZAÇÃO DO ÁUDIO PRONTO & CONFIGURAÇÃO DA TRANSCRIÇÃO -->
+            <div class="card" id="panel-audio-ready" style="display: none;">
+                <div class="audio-ready-header">
+                    <div>
+                        <h3 class="card-title" style="margin-bottom: 4px;">🎧 Áudio Preparado para Transcrição</h3>
+                        <p id="label-audio-info" style="color: var(--text-secondary); font-size: 0.9rem;">
+                            Duração: 00:00:00 | Amostras 16 kHz
+                        </p>
+                    </div>
+                    <button class="action-btn" id="btn-download-raw-audio">
+                        💾 Baixar Gravação (.wav)
+                    </button>
+                </div>
+
+                <!-- Player de Áudio Nativo -->
+                <audio id="audio-preview-player" controls style="width: 100%; margin: 16px 0; border-radius: var(--radius-sm); outline: none;"></audio>
+
+                <!-- Configuração de Modelo e Disparo -->
+                <div class="long-transcribe-settings">
+                    <div class="field-group" style="flex: 1; min-width: 250px;">
+                        <label class="field-label" for="select-long-model">Modelo de IA para Áudio Longo:</label>
+                        <select id="select-long-model">
+                            <option value="Xenova/whisper-tiny">Modelo Compacto (~39 MB - Mais Rápido)</option>
+                            <option value="Xenova/whisper-base" selected>Modelo Padrão (~75 MB - Equilibrado - Recomendado)</option>
+                            <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Fidelidade e Precisão)</option>
+                        </select>
+                    </div>
+
+                    <div class="field-group" style="width: 200px;">
+                        <label class="field-label" for="select-long-lang">Idioma do Áudio:</label>
+                        <select id="select-long-lang">
+                            <option value="portuguese" selected>Português (Brasil)</option>
+                            <option value="english">Inglês</option>
+                            <option value="spanish">Espanhol</option>
+                        </select>
+                    </div>
+
+                    <button class="action-btn primary large-btn" id="btn-start-batch-transcribe" style="height: 44px; align-self: flex-end;">
+                        ⚡ Iniciar Transcrição Completa
+                    </button>
+                </div>
+
+                <div style="font-size: 0.83rem; color: var(--text-muted); margin-top: -6px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                    <span>💡 <em>Recomendação: O <strong>Modelo Padrão (75 MB)</strong> é o mais rápido e equilibrado para a maioria dos áudios. O <strong>Modelo Avançado (150 MB)</strong> oferece máxima fidelidade e vocabulário técnico para reuniões e aulas.</em></span>
+                </div>
+            </div>
+
+            <!-- PAINEL 4: BARRA DE PROGRESSO & MÉTRICAS EM TEMPO REAL -->
+            <div class="card" id="panel-batch-progress" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong id="label-batch-status" style="color: var(--primary);">Transcrevendo áudio em blocos...</strong>
+                    <span id="label-batch-percentage" style="font-weight: 700; color: #fff;">0%</span>
+                </div>
+
+                <div class="progress-bar-bg" style="height: 14px;">
+                    <div class="progress-bar-fill" id="batch-progress-bar-fill" style="width: 0%;"></div>
+                </div>
+
+                <div class="batch-metrics-row">
+                    <span>Bloco: <strong id="metric-batch-chunk">0 / 0</strong></span>
+                    <span>Decorrido: <strong id="metric-batch-elapsed">00:00</strong></span>
+                    <span>Estimativa Restante: <strong id="metric-batch-eta">Calculando...</strong></span>
+                    <button class="action-btn danger" id="btn-cancel-batch" style="padding: 4px 12px; font-size: 0.85rem;">
+                        ⏹️ Cancelar Transcrição
+                    </button>
+                </div>
+            </div>
+
+            <!-- PAINEL 5: RESULTADO DA TRANSCRIÇÃO & EXPORTAÇÕES -->
+            <div class="card" id="panel-batch-results" style="display: none;">
+                <div class="editor-toolbar" style="border-radius: var(--radius-sm); margin-bottom: 12px;">
+                    <div class="toolbar-stats">
+                        <span>Palavras: <strong id="long-stat-words">0</strong></span>
+                        <span>Caracteres: <strong id="long-stat-chars">0</strong></span>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-secondary); cursor: pointer;">
+                            <input type="checkbox" id="check-show-timestamps" checked>
+                            Exibir com Timestamps ([00:00])
+                        </label>
+                        <button class="action-btn primary" id="btn-copy-long-result">📋 Copiar</button>
+                        <button class="action-btn" id="btn-download-long-txt">💾 Baixar .TXT</button>
+                        <button class="action-btn" id="btn-download-long-srt">⏱️ Baixar .SRT (Legenda)</button>
+                        <button class="action-btn danger" id="btn-clear-long-result">🗑️ Limpar</button>
+                    </div>
+                </div>
+
+                <textarea 
+                    id="long-transcription-editor" 
+                    class="editor-textarea" 
+                    placeholder="O texto transcrito dos blocos de áudio aparecerá aqui conforme for processado..."
+                ></textarea>
+            </div>
+
+        </section>
+
 
         <!-- ABA 2: VOCABULÁRIO & REGRAS -->
         <section class="tab-content" id="tab-vocab">
@@ -401,9 +559,58 @@
                 </div>
             </div>
 
-            <!-- Guia de Uso Rápido -->
+            <!-- Guia de Uso: Áudio Longo & Arquivos -->
+            <div class="card" style="border-left: 4px solid var(--accent-cyan);">
+                <h3 class="card-title" style="color: var(--accent-cyan);">📁 Guia: Gravação Contínua & Arquivos de Áudio</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.95rem; line-height: 1.6;">
+                    A aba <strong>📁 Gravar & Arquivo</strong> foi projetada para gravações longas sem interrupções (reuniões, aulas, entrevistas, palestras) e para transcrever arquivos de áudio que você já possui gravados no seu dispositivo.
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                    <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <h4 style="color: #67e8f9; margin-bottom: 8px;">🎙️ Modo 1: Gravação Contínua</h4>
+                        <ol style="margin-left: 18px; color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+                            <li>Acesse a aba <strong>📁 Gravar & Arquivo</strong> e selecione o modo <em>"🎙️ Gravar Áudio Longo"</em>.</li>
+                            <li>Clique em <strong>"Iniciar Gravação Contínua"</strong>. O sistema grava continuamente sem parar pelo silêncio.</li>
+                            <li>Use <strong>Pausar</strong> se precisar respirar ou pausar a reunião.</li>
+                            <li>Ao terminar, clique em <strong>"Finalizar e Preparar"</strong>. O player de áudio exibirá a duração e tamanho do áudio.</li>
+                        </ol>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <h4 style="color: #67e8f9; margin-bottom: 8px;">📤 Modo 2: Carregar Arquivo de Áudio</h4>
+                        <ol style="margin-left: 18px; color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+                            <li>Na aba <strong>📁 Gravar & Arquivo</strong>, selecione <em>"📤 Carregar Arquivo de Áudio"</em>.</li>
+                            <li>Arraste ou clique para selecionar seu arquivo (suporta <strong>.mp3, .wav, .m4a, .ogg, .webm</strong>).</li>
+                            <li>O arquivo é decodificado 100% no seu navegador sem ser enviado a nenhum servidor na internet.</li>
+                        </ol>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <h4 style="color: #67e8f9; margin-bottom: 8px;">⚡ Transcrição Inteligente em Lote</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+                            • O áudio é fatiado automaticamente em blocos de <strong>25 segundos</strong>.<br>
+                            • Acompanhe o progresso em tempo real (barra azul, tempo decorrido e estimativa restante).<br>
+                            • O texto é escrito bloco a bloco na tela em largura total.<br>
+                            • Você pode cancelar a qualquer momento sem perder o texto já processado.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <h4 style="color: #67e8f9; margin-bottom: 8px;">💾 Exportações & Legendas (.SRT)</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+                            • <strong>Exibir com Timestamps:</strong> Ative a caixa de seleção para visualizar marcadores de tempo como <code>[00:01:15]</code> no texto.<br>
+                            • <strong>Baixar .TXT:</strong> Salva a transcrição completa formatada com nome automático padronizado.<br>
+                            • <strong>Baixar .SRT:</strong> Gera arquivo de legenda profissional sincronizado, compatível com YouTube, VLC e editores de vídeo.<br>
+                            • <strong>Baixar Áudio (.WAV):</strong> Salve uma cópia do áudio bruto gravado para guardar no seu computador.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guia de Uso Rápido: Ditador -->
             <div class="card">
-                <h3 class="card-title">📖 Guia Rápido de Uso</h3>
+                <h3 class="card-title">📖 Guia Rápido: Ditador em Tempo Real</h3>
                 <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
                     <div style="display: flex; gap: 14px; align-items: flex-start;">
                         <span style="background: var(--primary); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">1</span>
@@ -506,10 +713,9 @@
                     <div>
                         <h4 style="color: #93c5fd; margin-bottom: 6px;">🧠 Escolha do Modelo de IA</h4>
                         <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
-                            • <strong>Modelo Compacto (~39 MB)</strong>: Recomendado para computadores comuns ou celulares; respostas instantâneas.<br>
-                            • <strong>Modelo Padrão (~75 MB)</strong>: Equilíbrio ideal entre velocidade e vocabulário.<br>
-                            • <strong>Modelo Avançado (~150 MB)</strong>: Alta fidelidade para textos longos e palavras técnicas.<br>
-                            • <strong>Modelo Profissional (~750 MB)</strong>: Máxima precisão de estúdio para quem possui placa de vídeo (GPU) potente.
+                            • <strong>Modelo Compacto (~39 MB)</strong>: Ultra leve e instantâneo. Ideal para celulares e computadores básicos.<br>
+                            • <strong>Modelo Padrão (~75 MB)</strong>: Equilíbrio perfeito entre velocidade e precisão. Excelente para o dia a dia.<br>
+                            • <strong>Modelo Avançado (~150 MB)</strong>: Máxima precisão e vocabulário técnico para reuniões, aulas e áudios longos, com 100% de estabilidade na memória do navegador.
                         </p>
                     </div>
 

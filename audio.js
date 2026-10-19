@@ -29,6 +29,11 @@ export class AudioManager {
 
         this.onAudioChunkReady = null; // callback(float32Array, durationSec)
         this.onLevelUpdate = null;      // callback(level_0_to_100)
+
+        // Propriedades para Gravação Contínua (Áudios Longos / Reuniões)
+        this.isContinuous = false;
+        this.isContinuousPaused = false;
+        this.continuousChunks = [];
     }
 
     async start(onAudioChunkReady, onLevelUpdate, deviceId = null) {
@@ -129,6 +134,21 @@ export class AudioManager {
         if (!this.isActive) return;
 
         const inputData = event.inputBuffer.getChannelData(0);
+
+        // Se estiver em modo de Gravação Contínua para Áudio Longo
+        if (this.isContinuous) {
+            let sumSquares = 0;
+            for (let i = 0; i < inputData.length; i++) sumSquares += inputData[i] * inputData[i];
+            const rms = Math.sqrt(sumSquares / inputData.length);
+            if (this.onLevelUpdate) {
+                const level = Math.min(100, (rms / 0.12) * 100);
+                this.onLevelUpdate(level);
+            }
+            if (!this.isContinuousPaused) {
+                this.continuousChunks.push(new Float32Array(inputData));
+            }
+            return;
+        }
         const chunk = new Float32Array(inputData);
 
         // Calcular RMS (Energia do bloco)
@@ -232,7 +252,8 @@ export class AudioManager {
             const indexFloor = Math.floor(srcIndex);
             const indexCeil = Math.min(inputBuffer.length - 1, Math.ceil(srcIndex));
             const fraction = srcIndex - indexFloor;
-            output[i] = inputBuffer[indexFloor] * (1 - fraction) + inputBuffer[indexCeil] * fraction;
+            const val = inputBuffer[indexFloor] * (1 - fraction) + inputBuffer[indexCeil] * fraction;
+            output[i] = Number.isFinite(val) ? Math.max(-1.0, Math.min(1.0, val)) : 0;
         }
 
         return output;
@@ -297,5 +318,195 @@ export class AudioManager {
                 }
             }, durationSeconds * 1000);
         });
+    }
+
+    /**
+     * Inicia gravação contínua de áudio longo (Reuniões, Aulas, Podcasts)
+     * Não executa VAD, apenas acumula todo o áudio bruto sem interrupções.
+     */
+    async startContinuousRecording(onLevelUpdate, deviceId = null) {
+        if (this.isActive) this.stop();
+
+        this.onLevelUpdate = onLevelUpdate;
+        this.continuousChunks = [];
+        this.isContinuous = true;
+        this.isContinuousPaused = false;
+
+        const audioConstraints = {
+            channelCount: 1,
+            sampleRate: { ideal: this.targetSampleRate },
+            echoCancellation: true,
+            noiseSuppression: false, // Mantém fidelidade de voz para reuniões
+            autoGainControl: true
+        };
+
+        if (deviceId) {
+            audioConstraints.deviceId = { exact: deviceId };
+        }
+
+        try {
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        } catch (_) {
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        try {
+            this.audioContext = new AudioContextClass({ sampleRate: this.targetSampleRate });
+        } catch (_) {
+            this.audioContext = new AudioContextClass();
+        }
+
+        this.actualSampleRate = this.audioContext.sampleRate || this.targetSampleRate;
+        this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
+        
+        const bufferSize = 4096;
+        this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+        this.processorNode.onaudioprocess = (e) => this._processAudio(e);
+
+        this.sourceNode.connect(this.processorNode);
+        this.processorNode.connect(this.audioContext.destination);
+
+        this.isActive = true;
+    }
+
+    pauseContinuousRecording() {
+        this.isContinuousPaused = true;
+    }
+
+    resumeContinuousRecording() {
+        this.isContinuousPaused = false;
+    }
+
+    /**
+     * Finaliza a gravação contínua, unifica os blocos, resamostra para 16kHz
+     * e gera um Float32Array e um Blob .WAV pronto para reprodução e transcrição.
+     */
+    stopContinuousRecording() {
+        this.isContinuous = false;
+        this.isContinuousPaused = false;
+        this.stop();
+
+        if (this.continuousChunks.length === 0) {
+            return null;
+        }
+
+        let totalSamples = 0;
+        for (const c of this.continuousChunks) totalSamples += c.length;
+        const merged = new Float32Array(totalSamples);
+        let offset = 0;
+        for (const c of this.continuousChunks) {
+            merged.set(c, offset);
+            offset += c.length;
+        }
+
+        this.continuousChunks = [];
+
+        // Resamostra para 16kHz exatos se necessário
+        const final16k = (this.actualSampleRate === 16000)
+            ? merged
+            : this._resampleTo16k(merged, this.actualSampleRate);
+
+        const durationSec = final16k.length / 16000;
+        const wavBlob = this.encodeWAV(final16k, 16000);
+
+        return {
+            audioFloat32: final16k,
+            durationSec,
+            wavBlob
+        };
+    }
+
+    /**
+     * Decodifica qualquer arquivo de áudio carregado pelo usuário (.mp3, .wav, .m4a, .ogg, etc.)
+     * nativamente usando AudioContext e converte em Float32Array 16kHz mono.
+     */
+    async decodeAudioFile(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContextClass();
+        
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        const numChannels = audioBuffer.numberOfChannels;
+        const length = audioBuffer.length;
+        const sampleRate = audioBuffer.sampleRate;
+
+        // Combina canais estéreo para mono
+        const mono = new Float32Array(length);
+        if (numChannels === 1) {
+            mono.set(audioBuffer.getChannelData(0));
+        } else {
+            const ch0 = audioBuffer.getChannelData(0);
+            const ch1 = audioBuffer.getChannelData(1);
+            for (let i = 0; i < length; i++) {
+                mono[i] = (ch0[i] + ch1[i]) * 0.5;
+            }
+        }
+
+        try { ctx.close(); } catch (_) {}
+
+        // Resamostra para 16kHz
+        const final16k = (sampleRate === 16000)
+            ? mono
+            : this._resampleTo16k(mono, sampleRate);
+
+        const durationSec = final16k.length / 16000;
+        const wavBlob = this.encodeWAV(final16k, 16000);
+
+        return {
+            audioFloat32: final16k,
+            durationSec,
+            wavBlob
+        };
+    }
+
+    /**
+     * Codificador nativo PCM WAV de 16-bit mono para reprodução e download de áudios
+     */
+    encodeWAV(samples, sampleRate = 16000) {
+        const buffer = new ArrayBuffer(44 + samples.length * 2);
+        const view = new DataView(buffer);
+
+        const writeString = (view, offset, string) => {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        };
+
+        /* RIFF identifier */
+        writeString(view, 0, 'RIFF');
+        /* file length */
+        view.setUint32(4, 36 + samples.length * 2, true);
+        /* RIFF type */
+        writeString(view, 8, 'WAVE');
+        /* format chunk identifier */
+        writeString(view, 12, 'fmt ');
+        /* format chunk length */
+        view.setUint32(16, 16, true);
+        /* sample format (raw PCM) */
+        view.setUint16(20, 1, true);
+        /* channel count (1 mono) */
+        view.setUint16(22, 1, true);
+        /* sample rate */
+        view.setUint32(24, sampleRate, true);
+        /* byte rate (sample rate * 2) */
+        view.setUint32(28, sampleRate * 2, true);
+        /* block align (2 bytes per sample) */
+        view.setUint16(32, 2, true);
+        /* bits per sample */
+        view.setUint16(34, 16, true);
+        /* data chunk identifier */
+        writeString(view, 36, 'data');
+        /* data chunk length */
+        view.setUint32(40, samples.length * 2, true);
+
+        // Converte Float32Array (-1.0 a 1.0) para 16-bit PCM Integers
+        let offset = 44;
+        for (let i = 0; i < samples.length; i++, offset += 2) {
+            const s = Math.max(-1, Math.min(1, samples[i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        }
+
+        return new Blob([buffer], { type: 'audio/wav' });
     }
 }

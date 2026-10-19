@@ -153,31 +153,38 @@ header {
     gap: 20px;
 }
 
-/* Barra de Abas */
+/* Barra de Abas Compacta e Otimizada */
 .tabs-nav {
     display: flex;
-    gap: 8px;
+    gap: 4px;
     background: rgba(17, 20, 30, 0.7);
-    padding: 6px;
+    padding: 4px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.tabs-nav::-webkit-scrollbar {
+    display: none;
 }
 
 .tab-btn {
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    padding: 10px 18px;
+    padding: 7px 11px;
     border-radius: var(--radius-sm);
-    font-size: 0.95rem;
+    font-size: 0.86rem;
     font-weight: 600;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
     transition: var(--transition);
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .tab-btn:hover {
@@ -188,7 +195,7 @@ header {
 .tab-btn.active {
     background: var(--primary);
     color: #ffffff;
-    box-shadow: 0 4px 15px var(--primary-glow);
+    box-shadow: 0 2px 10px var(--primary-glow);
 }
 
 /* Conteúdo das Abas */
@@ -532,6 +539,9 @@ select:focus, input[type="text"]:focus, textarea:focus {
 }
 
 .editor-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    display: block;
     flex: 1;
     min-height: 380px;
     background: transparent;
@@ -546,6 +556,30 @@ select:focus, input[type="text"]:focus, textarea:focus {
 
 .editor-textarea:focus {
     box-shadow: none;
+}
+
+/* Editor de Transcrição Longa com Largura Total e Estilo Glassmorphism */
+#long-transcription-editor {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    min-height: 380px;
+    background: rgba(11, 15, 25, 0.75);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    line-height: 1.8;
+    resize: vertical;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+#long-transcription-editor:focus {
+    border-color: var(--accent-blue);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 /* Barra de Comandos de Voz Rápidos */
@@ -764,4 +798,209 @@ input:checked + .slider:before {
 @keyframes toastIn {
     from { opacity: 0; transform: translateY(15px); }
     to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ==========================================================================
+   ESTILOS DA ABA: ÁUDIO LONGO & ARQUIVOS
+   ========================================================================== */
+
+/* Seletor de Modo (Gravar vs Importar) */
+.long-audio-mode-selector {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.mode-select-btn {
+    flex: 1;
+    min-width: 220px;
+    background: rgba(17, 20, 30, 0.7);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 12px 18px;
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.mode-select-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.mode-select-btn.active {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(16, 185, 129, 0.2));
+    border-color: var(--primary);
+    color: #ffffff;
+    box-shadow: 0 0 15px var(--border-glow);
+}
+
+/* Cabeçalho da Gravação Longa & Cronômetro */
+.long-record-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    padding: 10px 0;
+}
+
+.record-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 6px 14px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border-color);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.record-pulse-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.record-pulse-dot.recording {
+    background: var(--accent-red);
+    box-shadow: 0 0 10px var(--accent-red);
+    animation: mic-pulse 1.2s infinite;
+}
+
+.record-pulse-dot.paused {
+    background: var(--accent-amber);
+    box-shadow: 0 0 10px var(--accent-amber);
+}
+
+.long-timer {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3.2rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #ffffff;
+    text-shadow: 0 0 25px rgba(59, 130, 246, 0.3);
+}
+
+.long-record-controls {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+}
+
+.large-btn {
+    padding: 12px 24px !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+}
+
+.action-btn.success {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.35);
+}
+
+.action-btn.success:hover {
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+    transform: translateY(-1px);
+}
+
+/* Área de Dropzone de Arquivos */
+.dropzone {
+    border: 2px dashed rgba(255, 255, 255, 0.18);
+    border-radius: var(--radius-lg);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 45px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.dropzone:hover, .dropzone.dragover {
+    border-color: var(--primary);
+    background: rgba(59, 130, 246, 0.08);
+    transform: scale(1.005);
+}
+
+.dropzone-icon {
+    font-size: 44px;
+}
+
+.dropzone-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.dropzone-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    max-width: 520px;
+}
+
+/* Pré-visualização do Áudio */
+.audio-ready-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.long-transcribe-settings {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-top: 8px;
+}
+
+/* Métricas do Processamento em Lote */
+.batch-metrics-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 600px) {
+    .long-timer {
+        font-size: 2.4rem;
+    }
+    .long-record-controls {
+        flex-direction: column;
+        width: 100%;
+    }
+    .long-record-controls button {
+        width: 100%;
+    }
+    .long-transcribe-settings {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .long-transcribe-settings select,
+    .long-transcribe-settings button {
+        width: 100%;
+    }
 }

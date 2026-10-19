@@ -50,12 +50,18 @@ class WispWebApp {
         this.worker = null;
         this.isModelReady = false;
         this.isTranscribing = false;
+        this.isWorkerTranscribing = false;
+        this.pendingSpeechQueue = [];
+        this.batchChunkTimeout = null;
+        this.isBatchProcessing = false;
+        this.isBatchCancelled = false;
 
         this.initDOM();
         this.initWorker();
         this.initTabs();
         this.initAudioControls();
         this.initProfileManager();
+        this.initLongAudioController();
         this.renderAll();
         console.log("[WispWeb] Aplicativo pronto para uso!");
     }
@@ -66,6 +72,10 @@ class WispWebApp {
             const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
             if (saved) {
                 const parsed = JSON.parse(saved);
+                // Migração transparente: caso o usuário tivesse o modelo medium (750MB) salvo, migra para o modelo small (150MB)
+                if (parsed.settings && (parsed.settings.modelName === "Xenova/whisper-medium" || parsed.settings.modelName.includes("medium"))) {
+                    parsed.settings.modelName = "Xenova/whisper-small";
+                }
                 return {
                     custom_vocabulary: parsed.custom_vocabulary || DEFAULT_PROFILE.custom_vocabulary,
                     correction_rules: parsed.correction_rules || DEFAULT_PROFILE.correction_rules,
@@ -145,7 +155,58 @@ class WispWebApp {
             btnResetProfile: document.getElementById("btn-reset-profile"),
             toastContainer: document.getElementById("toast-container"),
             btnClearModelCache: document.getElementById("btn-clear-model-cache"),
-            labelCacheStatus: document.getElementById("label-cache-status")
+            labelCacheStatus: document.getElementById("label-cache-status"),
+
+            // Elementos da Aba: Gravar & Arquivo
+            btnModeRecord: document.getElementById("btn-mode-record"),
+            btnModeUpload: document.getElementById("btn-mode-upload"),
+            panelLongRecord: document.getElementById("panel-long-record"),
+            panelLongUpload: document.getElementById("panel-long-upload"),
+            panelAudioReady: document.getElementById("panel-audio-ready"),
+            panelBatchProgress: document.getElementById("panel-batch-progress"),
+            panelBatchResults: document.getElementById("panel-batch-results"),
+
+            // Gravação Contínua
+            longRecordDot: document.getElementById("long-record-dot"),
+            longRecordStatusText: document.getElementById("long-record-status-text"),
+            longRecordTimer: document.getElementById("long-record-timer"),
+            longVuBarFill: document.getElementById("long-vu-bar-fill"),
+            btnLongStart: document.getElementById("btn-long-start"),
+            btnLongPause: document.getElementById("btn-long-pause"),
+            btnLongFinish: document.getElementById("btn-long-finish"),
+            btnLongDiscard: document.getElementById("btn-long-discard"),
+
+            // Upload de Arquivo
+            audioDropzone: document.getElementById("audio-dropzone"),
+            inputAudioFile: document.getElementById("input-audio-file"),
+
+            // Pré-visualização e Disparo
+            labelAudioInfo: document.getElementById("label-audio-info"),
+            btnDownloadRawAudio: document.getElementById("btn-download-raw-audio"),
+            audioPreviewPlayer: document.getElementById("audio-preview-player"),
+            selectLongModel: document.getElementById("select-long-model"),
+            selectLongLang: document.getElementById("select-long-lang"),
+            btnStartBatchTranscribe: document.getElementById("btn-start-batch-transcribe"),
+
+            // Progresso em Lote
+            labelBatchStatus: document.getElementById("label-batch-status"),
+            labelBatchPercentage: document.getElementById("label-batch-percentage"),
+            batchProgressBarFill: document.getElementById("batch-progress-bar-fill"),
+            metricBatchChunk: document.getElementById("metric-batch-chunk"),
+            metricBatchElapsed: document.getElementById("metric-batch-elapsed"),
+            metricBatchEta: document.getElementById("metric-batch-eta"),
+            labelBatchEta: document.getElementById("metric-batch-eta"),
+            btnCancelBatch: document.getElementById("btn-cancel-batch"),
+
+            // Resultados e Exportação
+            longStatWords: document.getElementById("long-stat-words"),
+            longStatChars: document.getElementById("long-stat-chars"),
+            checkShowTimestamps: document.getElementById("check-show-timestamps"),
+            btnCopyLongResult: document.getElementById("btn-copy-long-result"),
+            btnDownloadLongTxt: document.getElementById("btn-download-long-txt"),
+            btnDownloadLongSrt: document.getElementById("btn-download-long-srt"),
+            btnClearLongResult: document.getElementById("btn-clear-long-result"),
+            longTranscriptionEditor: document.getElementById("long-transcription-editor")
         };
     }
 
@@ -175,18 +236,32 @@ class WispWebApp {
 
                     case "MODEL_READY":
                         this.isModelReady = true;
+                        this.isWorkerTranscribing = false;
                         this.elements.progressCard.style.display = "none";
                         this.updateSystemStatus("Modelo pronto", false);
                         this.showToast("Modelo de IA pronto para uso local!");
+                        this.processNextPendingDictation();
                         break;
 
                     case "TRANSCRIBE_SUCCESS":
+                        this.isWorkerTranscribing = false;
                         this.handleTranscriptionSuccess(payload);
+                        this.processNextPendingDictation();
+                        break;
+
+                    case "CHUNK_SUCCESS":
+                        this.handleBatchChunkSuccess(payload);
+                        break;
+
+                    case "CHUNK_ERROR":
+                        this.handleBatchChunkError(payload);
                         break;
 
                     case "ERROR":
+                        this.isWorkerTranscribing = false;
                         this.updateSystemStatus("Erro", false, true);
                         this.showToast(payload.message, "error");
+                        this.processNextPendingDictation();
                         break;
                 }
             };
@@ -375,21 +450,29 @@ class WispWebApp {
                 this.showToast("Nada para baixar!", "info");
                 return;
             }
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+            const filename = `ditado_wisp_${dateStr}_transcricao.txt`;
+
             const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `wisp_ditado_${new Date().toISOString().slice(0, 10)}.txt`;
+            a.download = filename;
             a.click();
             URL.revokeObjectURL(url);
-            this.showToast("Arquivo .txt baixado com sucesso!");
+            this.showToast(`Arquivo baixado: ${filename}`);
         });
 
         this.elements.btnClearText.addEventListener("click", () => {
-            if (this.elements.editor.value && confirm("Deseja realmente limpar todo o texto do editor?")) {
+            if (!this.elements.editor.value.trim()) {
+                this.showToast("O editor já está vazio.", "info");
+                return;
+            }
+            if (confirm("Deseja realmente limpar todo o texto do editor? Esta ação não pode ser desfeita.")) {
                 this.elements.editor.value = "";
                 this.updateEditorStats();
-                this.showToast("Editor limpo.");
+                this.showToast("Editor limpo com sucesso.");
             }
         });
     }
@@ -448,17 +531,38 @@ class WispWebApp {
     onSpeechChunkCaptured(audioFloat32, durationSec) {
         if (!this.isModelReady) return;
 
-        const initialPrompt = this.profile.custom_vocabulary.join(", ");
+        if (this.isWorkerTranscribing) {
+            // Fila de buffer sequencial para impedir concorrência no OrtRun()
+            if (!this.pendingSpeechQueue) this.pendingSpeechQueue = [];
+            if (this.pendingSpeechQueue.length >= 2) {
+                this.pendingSpeechQueue.shift();
+            }
+            this.pendingSpeechQueue.push({ audioFloat32, durationSec });
+            return;
+        }
+
+        this.dispatchDictationChunk(audioFloat32, durationSec);
+    }
+
+    dispatchDictationChunk(audioFloat32, durationSec) {
+        if (!this.worker || !this.isModelReady) return;
+        this.isWorkerTranscribing = true;
 
         this.worker.postMessage({
             type: "TRANSCRIBE",
             payload: {
                 audioFloat32,
                 duration: durationSec,
-                initialPrompt,
                 language: this.profile.settings.language
             }
         });
+    }
+
+    processNextPendingDictation() {
+        if (this.pendingSpeechQueue && this.pendingSpeechQueue.length > 0 && this.isModelReady && !this.isWorkerTranscribing) {
+            const nextItem = this.pendingSpeechQueue.shift();
+            this.dispatchDictationChunk(nextItem.audioFloat32, nextItem.durationSec);
+        }
     }
 
     // Tratamento do resultado da transcrição
@@ -924,6 +1028,748 @@ class WispWebApp {
             setTimeout(() => toast.remove(), 300);
         }, 3200);
     }
+
+
+    // =========================================================================
+    // CONTROLADOR DA ABA: ÁUDIO LONGO & ARQUIVOS
+    // =========================================================================
+    initLongAudioController() {
+        // Estado do Áudio Longo
+        this.longAudioData = null; // { audioFloat32, durationSec, wavBlob, name }
+        this.longRecordStartTime = 0;
+        this.longRecordElapsedSec = 0;
+        this.longRecordTimerInterval = null;
+        this.isLongRecording = false;
+        this.isLongPaused = false;
+
+        // Estado do Processamento em Lote
+        this.isBatchProcessing = false;
+        this.isBatchCancelled = false;
+        this.batchChunks = [];
+        this.batchCurrentIndex = 0;
+        this.batchStartTime = 0;
+        this.batchChunkLatencies = [];
+        this.batchResults = []; // [{ chunkIndex, startSec, endSec, rawText, processedText }]
+
+        // Alternância de Modos (Gravação vs Upload)
+        if (this.elements.btnModeRecord && this.elements.btnModeUpload) {
+            this.elements.btnModeRecord.addEventListener("click", () => this.switchLongAudioMode("record"));
+            this.elements.btnModeUpload.addEventListener("click", () => this.switchLongAudioMode("upload"));
+        }
+
+        // Controles de Gravação Contínua
+        if (this.elements.btnLongStart) {
+            this.elements.btnLongStart.addEventListener("click", () => this.startLongRecording());
+            this.elements.btnLongPause.addEventListener("click", () => this.togglePauseLongRecording());
+            this.elements.btnLongFinish.addEventListener("click", () => this.finishLongRecording());
+            this.elements.btnLongDiscard.addEventListener("click", () => this.discardLongRecording());
+        }
+
+        // Upload de Arquivo (Drag & Drop e Input File)
+        if (this.elements.audioDropzone && this.elements.inputAudioFile) {
+            this.elements.audioDropzone.addEventListener("click", () => this.elements.inputAudioFile.click());
+            
+            this.elements.audioDropzone.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                this.elements.audioDropzone.classList.add("dragover");
+            });
+
+            this.elements.audioDropzone.addEventListener("dragleave", () => {
+                this.elements.audioDropzone.classList.remove("dragover");
+            });
+
+            this.elements.audioDropzone.addEventListener("drop", (e) => {
+                e.preventDefault();
+                this.elements.audioDropzone.classList.remove("dragover");
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    this.handleAudioFileSelected(e.dataTransfer.files[0]);
+                }
+            });
+
+            this.elements.inputAudioFile.addEventListener("change", (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    this.handleAudioFileSelected(e.target.files[0]);
+                }
+            });
+        }
+
+        // Ações do Áudio Preparado
+        if (this.elements.btnDownloadRawAudio) {
+            this.elements.btnDownloadRawAudio.addEventListener("click", () => this.downloadPreparedRawAudio());
+        }
+
+        if (this.elements.btnStartBatchTranscribe) {
+            this.elements.btnStartBatchTranscribe.addEventListener("click", () => this.startBatchTranscription());
+        }
+
+        if (this.elements.btnCancelBatch) {
+            this.elements.btnCancelBatch.addEventListener("click", () => this.cancelBatchTranscription());
+        }
+
+        // Ações do Editor de Resultados
+        if (this.elements.checkShowTimestamps) {
+            this.elements.checkShowTimestamps.addEventListener("change", () => this.renderBatchResults());
+        }
+
+        if (this.elements.btnCopyLongResult) {
+            this.elements.btnCopyLongResult.addEventListener("click", () => {
+                const text = this.elements.longTranscriptionEditor.value;
+                if (!text.trim()) {
+                    this.showToast("Nenhum texto para copiar!", "info");
+                    return;
+                }
+                navigator.clipboard.writeText(text);
+                const originalHtml = this.elements.btnCopyLongResult.innerHTML;
+                this.elements.btnCopyLongResult.innerHTML = "✅ Copiado!";
+                setTimeout(() => {
+                    this.elements.btnCopyLongResult.innerHTML = originalHtml;
+                }, 1800);
+                this.showToast("Transcrição copiada com sucesso!");
+            });
+        }
+
+        if (this.elements.btnDownloadLongTxt) {
+            this.elements.btnDownloadLongTxt.addEventListener("click", () => this.downloadLongAsTxt());
+        }
+
+        if (this.elements.btnDownloadLongSrt) {
+            this.elements.btnDownloadLongSrt.addEventListener("click", () => this.downloadLongAsSrt());
+        }
+
+        if (this.elements.btnClearLongResult) {
+            this.elements.btnClearLongResult.addEventListener("click", () => {
+                if (!this.elements.longTranscriptionEditor.value.trim()) {
+                    this.showToast("O editor de transcrição já está vazio.", "info");
+                    return;
+                }
+                if (confirm("Deseja realmente limpar todo o texto da transcrição? Esta ação não pode ser desfeita.")) {
+                    this.batchResults = [];
+                    this.elements.longTranscriptionEditor.value = "";
+                    this.updateLongEditorStats();
+                    this.showToast("Texto da transcrição limpo com sucesso.");
+                }
+            });
+        }
+    }
+
+    switchLongAudioMode(mode) {
+        if (mode === "record") {
+            this.elements.btnModeRecord.classList.add("active");
+            this.elements.btnModeUpload.classList.remove("active");
+            this.elements.panelLongRecord.style.display = "block";
+            this.elements.panelLongUpload.style.display = "none";
+        } else {
+            this.elements.btnModeUpload.classList.add("active");
+            this.elements.btnModeRecord.classList.remove("active");
+            this.elements.panelLongUpload.style.display = "block";
+            this.elements.panelLongRecord.style.display = "none";
+        }
+    }
+
+    // Iniciar Gravação Contínua
+    async startLongRecording() {
+        if (this.isLongRecording) return;
+
+        try {
+            this.isLongRecording = true;
+            this.isLongPaused = false;
+            this.longRecordElapsedSec = 0;
+            this.elements.longRecordTimer.textContent = "00:00:00";
+
+            await this.audioManager.startContinuousRecording(
+                (level) => {
+                    if (this.elements.longVuBarFill) {
+                        this.elements.longVuBarFill.style.width = `${level}%`;
+                    }
+                },
+                this.profile.settings.selectedMicId
+            );
+
+            this.longRecordStartTime = Date.now();
+            this.longRecordTimerInterval = setInterval(() => {
+                if (!this.isLongPaused) {
+                    this.longRecordElapsedSec++;
+                    this.elements.longRecordTimer.textContent = this.formatTimerSeconds(this.longRecordElapsedSec);
+                }
+            }, 1000);
+
+            // Atualiza UI
+            this.elements.longRecordDot.className = "record-pulse-dot recording";
+            this.elements.longRecordStatusText.textContent = "Gravando áudio contínuo...";
+            this.elements.btnLongStart.style.display = "none";
+            this.elements.btnLongPause.style.display = "inline-flex";
+            this.elements.btnLongFinish.style.display = "inline-flex";
+            this.elements.btnLongDiscard.style.display = "inline-flex";
+
+            this.playChime(true);
+            this.showToast("Gravação contínua iniciada!");
+        } catch (err) {
+            this.isLongRecording = false;
+            console.error("Erro ao iniciar gravação contínua:", err);
+            this.showToast("Erro ao acessar microfone: " + err.message, "error");
+        }
+    }
+
+    togglePauseLongRecording() {
+        if (!this.isLongRecording) return;
+
+        if (!this.isLongPaused) {
+            this.audioManager.pauseContinuousRecording();
+            this.isLongPaused = true;
+            this.elements.longRecordDot.className = "record-pulse-dot paused";
+            this.elements.longRecordStatusText.textContent = "Gravação Pausada";
+            this.elements.btnLongPause.textContent = "▶️ Retomar";
+            this.showToast("Gravação pausada.");
+        } else {
+            this.audioManager.resumeContinuousRecording();
+            this.isLongPaused = false;
+            this.elements.longRecordDot.className = "record-pulse-dot recording";
+            this.elements.longRecordStatusText.textContent = "Gravando áudio contínuo...";
+            this.elements.btnLongPause.textContent = "⏸️ Pausar";
+            this.showToast("Gravação retomada.");
+        }
+    }
+
+    finishLongRecording() {
+        if (!this.isLongRecording) return;
+
+        clearInterval(this.longRecordTimerInterval);
+        this.longRecordTimerInterval = null;
+
+        const result = this.audioManager.stopContinuousRecording();
+        this.isLongRecording = false;
+        this.isLongPaused = false;
+
+        // Reset UI de Gravação
+        this.elements.longRecordDot.className = "record-pulse-dot";
+        this.elements.longRecordStatusText.textContent = "Gravação concluída!";
+        this.elements.btnLongStart.style.display = "inline-flex";
+        this.elements.btnLongPause.style.display = "none";
+        this.elements.btnLongFinish.style.display = "none";
+        this.elements.btnLongDiscard.style.display = "none";
+        if (this.elements.longVuBarFill) this.elements.longVuBarFill.style.width = "0%";
+
+        if (!result || result.durationSec < 0.5) {
+            this.showToast("Áudio gravado muito curto para transcrição.", "info");
+            return;
+        }
+
+        const dateStr = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        this.setPreparedAudio(result.audioFloat32, result.durationSec, result.wavBlob, `gravacao_wisp_${dateStr}.wav`);
+        this.showToast(`Áudio gravado com sucesso (${this.formatTimerSeconds(result.durationSec)})!`);
+    }
+
+    discardLongRecording() {
+        if (!confirm("Deseja realmente descartar esta gravação?")) return;
+
+        clearInterval(this.longRecordTimerInterval);
+        this.longRecordTimerInterval = null;
+        this.audioManager.stopContinuousRecording();
+
+        this.isLongRecording = false;
+        this.isLongPaused = false;
+        this.longRecordElapsedSec = 0;
+
+        this.elements.longRecordTimer.textContent = "00:00:00";
+        this.elements.longRecordDot.className = "record-pulse-dot";
+        this.elements.longRecordStatusText.textContent = "Pronto para iniciar gravação";
+        this.elements.btnLongStart.style.display = "inline-flex";
+        this.elements.btnLongPause.style.display = "none";
+        this.elements.btnLongFinish.style.display = "none";
+        this.elements.btnLongDiscard.style.display = "none";
+        if (this.elements.longVuBarFill) this.elements.longVuBarFill.style.width = "0%";
+
+        this.showToast("Gravação descartada.", "info");
+    }
+
+    // Tratamento de Arquivo de Áudio Carregado (Upload)
+    async handleAudioFileSelected(file) {
+        if (!file) return;
+
+        try {
+            this.showToast("Decodificando arquivo de áudio no navegador...", "info");
+            const result = await this.audioManager.decodeAudioFile(file);
+
+            if (!result || result.durationSec < 0.5) {
+                this.showToast("Arquivo de áudio inválido ou sem dados sonoros.", "error");
+                return;
+            }
+
+            this.setPreparedAudio(result.audioFloat32, result.durationSec, result.wavBlob, file.name);
+            this.showToast(`Arquivo '${file.name}' decodificado e pronto para transcrição!`);
+        } catch (err) {
+            console.error("Erro ao decodificar arquivo:", err);
+            this.showToast("Falha ao abrir arquivo de áudio: " + err.message, "error");
+        }
+    }
+
+    // Configura o áudio pronto para pré-visualização e transcrição
+    setPreparedAudio(audioFloat32, durationSec, wavBlob, name) {
+        this.longAudioData = {
+            audioFloat32,
+            durationSec,
+            wavBlob,
+            name
+        };
+
+        // Carrega áudio no player
+        const audioUrl = URL.createObjectURL(wavBlob);
+        this.elements.audioPreviewPlayer.src = audioUrl;
+
+        // Atualiza textos informativos
+        const mb = (wavBlob.size / (1024 * 1024)).toFixed(1);
+        this.elements.labelAudioInfo.textContent = `Arquivo: ${name} | Duração: ${this.formatTimerSeconds(durationSec)} | Tamanho: ${mb} MB`;
+
+        // Exibe painel de áudio pronto e rola suavemente
+        this.elements.panelAudioReady.style.display = "block";
+        this.elements.panelAudioReady.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // Gera nome base limpo e padronizado para exportações de arquivo
+    getExportBaseName() {
+        let base = "gravacao_wisp";
+        if (this.longAudioData && this.longAudioData.name) {
+            base = this.longAudioData.name.replace(/\.(wav|mp3|m4a|ogg|webm|flac|aac|wma)$/i, "");
+        } else {
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+            base = `gravacao_wisp_${dateStr}`;
+        }
+        base = base.replace(/(_transcricao|_audio)+$/gi, "");
+        return base;
+    }
+
+    downloadPreparedRawAudio() {
+        if (!this.longAudioData || !this.longAudioData.wavBlob) return;
+
+        const url = URL.createObjectURL(this.longAudioData.wavBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        const filename = `${this.getExportBaseName()}_audio.wav`;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.showToast(`Áudio bruto baixado: ${filename}`);
+    }
+
+    // Iniciar Transcrição Completa em Lote (Smart Chunking de 25 segundos)
+    async startBatchTranscription() {
+        if (!this.longAudioData || !this.longAudioData.audioFloat32) {
+            this.showToast("Nenhum áudio carregado para transcrição!", "info");
+            return;
+        }
+
+        // Previne disparos paralelos
+        if (this.isBatchProcessing) {
+            this.showToast("A transcrição já está em processamento.", "info");
+            return;
+        }
+
+        const selectedModel = this.elements.selectLongModel.value;
+
+        // Desabilita botão de início e ativa botão de cancelamento
+        this.elements.btnStartBatchTranscribe.disabled = true;
+        this.elements.btnCancelBatch.disabled = false;
+        this.elements.btnCancelBatch.textContent = "🛑 Cancelar Transcrição";
+
+        // Se o modelo escolhido for diferente do modelo atualmente carregado na memória do Worker
+        if (this.profile.settings.modelName !== selectedModel) {
+            this.showToast(`Carregando modelo '${selectedModel}' para transcrição longa...`, "info");
+            this.profile.settings.modelName = selectedModel;
+            this.elements.selectModel.value = selectedModel;
+            this.saveProfile();
+            this.loadSelectedModel();
+
+            // Aguarda o modelo estar pronto com timeout de segurança
+            const loaded = await new Promise((resolve) => {
+                const startTime = Date.now();
+                const checkInterval = setInterval(() => {
+                    if (this.isModelReady) {
+                        clearInterval(checkInterval);
+                        resolve(true);
+                    } else if (Date.now() - startTime > 45000) {
+                        clearInterval(checkInterval);
+                        resolve(false);
+                    }
+                }, 200);
+            });
+
+            if (!loaded && !this.isModelReady) {
+                this.showToast("Tempo esgotado ao preparar modelo. Tente novamente.", "error");
+                this.elements.btnStartBatchTranscribe.disabled = false;
+                return;
+            }
+        }
+
+        // Se o modelo padrão ainda não terminou de baixar na primeira carga da página
+        if (!this.isModelReady) {
+            this.showToast("Aguardando inicialização do modelo de IA...", "info");
+            const ready = await new Promise((resolve) => {
+                const startTime = Date.now();
+                const checkInterval = setInterval(() => {
+                    if (this.isModelReady) {
+                        clearInterval(checkInterval);
+                        resolve(true);
+                    } else if (Date.now() - startTime > 30000) {
+                        clearInterval(checkInterval);
+                        resolve(false);
+                    }
+                }, 200);
+            });
+            if (!ready && !this.isModelReady) {
+                this.showToast("O modelo de IA ainda está sendo baixado. Aguarde a conclusão da barra azul.", "warning");
+                this.elements.btnStartBatchTranscribe.disabled = false;
+                return;
+            }
+        }
+
+        // Fatiamento do áudio em blocos sequenciais de 25 segundos
+        // 25s é seguro, rápido e fica confortavelmente dentro da janela nativa de 30s do Whisper
+        const CHUNK_DURATION_SEC = 25;
+        const sampleRate = 16000;
+        const totalSamples = this.longAudioData.audioFloat32.length;
+        const samplesPerChunk = CHUNK_DURATION_SEC * sampleRate;
+        const totalChunks = Math.ceil(totalSamples / samplesPerChunk);
+
+        this.batchChunks = [];
+        for (let i = 0; i < totalChunks; i++) {
+            const startSample = i * samplesPerChunk;
+            const endSample = Math.min(totalSamples, (i + 1) * samplesPerChunk);
+            // slice() cria uma cópia isolada de buffer pequeno e limpo (evita manter referências ao buffer gigante)
+            const slice = new Float32Array(this.longAudioData.audioFloat32.slice(startSample, endSample));
+
+            this.batchChunks.push({
+                chunkIndex: i,
+                totalChunks,
+                startSec: Math.round(startSample / sampleRate),
+                endSec: Math.round(endSample / sampleRate),
+                audioFloat32: slice
+            });
+        }
+
+        // Inicializa estado do lote
+        this.isBatchProcessing = true;
+        this.isBatchCancelled = false;
+        this.batchCurrentIndex = 0;
+        this.batchResults = [];
+        this.batchStartTime = performance.now();
+        this.batchChunkLatencies = [];
+
+        // Exibe painéis de progresso e resultado
+        this.elements.panelBatchProgress.style.display = "block";
+        this.elements.panelBatchResults.style.display = "block";
+        this.elements.labelBatchStatus.style.color = "var(--text-primary)";
+        this.elements.longTranscriptionEditor.value = "";
+        this.updateBatchProgressUI(0, totalChunks);
+
+        this.elements.panelBatchProgress.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        this.showToast(`Iniciando transcrição de ${totalChunks} blocos de áudio...`);
+
+        // Dispara o primeiro bloco
+        this.dispatchNextBatchChunk();
+    }
+
+    dispatchNextBatchChunk() {
+        if (this.batchChunkTimeout) {
+            clearTimeout(this.batchChunkTimeout);
+            this.batchChunkTimeout = null;
+        }
+
+        if (!this.isBatchProcessing || this.isBatchCancelled) {
+            this.elements.btnStartBatchTranscribe.disabled = false;
+            return;
+        }
+
+        if (this.batchCurrentIndex >= this.batchChunks.length) {
+            // Todos os blocos foram processados!
+            this.finishBatchTranscription();
+            return;
+        }
+
+        const chunk = this.batchChunks[this.batchCurrentIndex];
+        const language = this.elements.selectLongLang.value || "portuguese";
+
+        this.updateBatchProgressUI(this.batchCurrentIndex, this.batchChunks.length);
+
+        // Timeout dinâmico por bloco baseado no porte do modelo selecionado
+        const modelName = this.profile.settings.modelName || "";
+        let chunkTimeoutMs = 70000; // 70s para tiny e base (que levam 2-5s)
+        if (modelName.includes("medium") || modelName.includes("large")) {
+            chunkTimeoutMs = 180000; // 3 minutos para medium (modelo de 750MB em WASM CPU)
+        } else if (modelName.includes("small")) {
+            chunkTimeoutMs = 100000; // 100s para small (150MB)
+        }
+
+        this.batchChunkTimeout = setTimeout(() => {
+            if (this.isBatchProcessing && !this.isBatchCancelled) {
+                console.warn(`[Batch] Bloco ${chunk.chunkIndex} excedeu tempo limite de ${chunkTimeoutMs / 1000}s. Avançando...`);
+                this.handleBatchChunkError({
+                    chunkIndex: chunk.chunkIndex,
+                    message: "Tempo limite de processamento excedido para este modelo."
+                });
+            }
+        }, chunkTimeoutMs);
+
+        this.worker.postMessage({
+            type: "TRANSCRIBE_CHUNK",
+            payload: {
+                chunkIndex: chunk.chunkIndex,
+                totalChunks: chunk.totalChunks,
+                audioFloat32: chunk.audioFloat32,
+                language: language,
+                startSec: chunk.startSec,
+                endSec: chunk.endSec
+            }
+        });
+    }
+
+    handleBatchChunkSuccess(payload) {
+        if (this.batchChunkTimeout) {
+            clearTimeout(this.batchChunkTimeout);
+            this.batchChunkTimeout = null;
+        }
+
+        if (!this.isBatchProcessing || this.isBatchCancelled) return;
+
+        const { chunkIndex, totalChunks, rawText, latency, startSec, endSec } = payload;
+        this.batchChunkLatencies.push(latency);
+
+        // Aplica regras de auto-correção
+        let processed = (rawText || "").trim();
+        for (const [from, to] of Object.entries(this.profile.correction_rules || {})) {
+            const regex = new RegExp(`\\b${from}\\b`, "gi");
+            processed = processed.replace(regex, to);
+        }
+
+        this.batchResults.push({
+            chunkIndex,
+            startSec,
+            endSec,
+            rawText,
+            processedText: processed
+        });
+
+        // Atualiza renderização de texto imediatamente e progresso
+        this.renderBatchResults();
+        this.batchCurrentIndex++;
+        this.updateBatchProgressUI(this.batchCurrentIndex, totalChunks);
+
+        // Dispara próximo bloco
+        this.dispatchNextBatchChunk();
+    }
+
+    handleBatchChunkError(payload) {
+        if (this.batchChunkTimeout) {
+            clearTimeout(this.batchChunkTimeout);
+            this.batchChunkTimeout = null;
+        }
+
+        if (!this.isBatchProcessing || this.isBatchCancelled) return;
+
+        console.warn(`Erro no bloco ${payload.chunkIndex}:`, payload.message);
+        const chunk = this.batchChunks[this.batchCurrentIndex] || { startSec: 0, endSec: 0 };
+
+        // Diagnóstico claro no placeholder conforme o motivo do erro
+        let placeholder = "[Trecho não decodificado ou com ruído]";
+        if (payload.message && payload.message.includes("Tempo limite")) {
+            placeholder = "[Tempo limite excedido - processamento muito lento para este modelo]";
+        } else if (payload.message && (payload.message.includes("memória") || payload.message.includes("bad_alloc") || payload.message.includes("OrtRun"))) {
+            placeholder = "[Memória do navegador esgotada para modelo de 750MB. Recomendado: Modelo Avançado 150MB]";
+            if (!this.hasShownMemoryWarning) {
+                this.hasShownMemoryWarning = true;
+                this.showToast("O modelo de 750 MB excedeu o limite de memória WebAssembly. Recomendamos o Modelo Avançado (150 MB).", "warning", 8000);
+            }
+        }
+
+        this.batchResults.push({
+            chunkIndex: payload.chunkIndex,
+            startSec: chunk.startSec,
+            endSec: chunk.endSec,
+            rawText: "",
+            processedText: placeholder
+        });
+
+        this.renderBatchResults();
+        this.batchCurrentIndex++;
+        this.updateBatchProgressUI(this.batchCurrentIndex, this.batchChunks.length);
+        this.dispatchNextBatchChunk();
+    }
+
+    updateBatchProgressUI(completed, total) {
+        if (!total || total <= 0) return;
+        const pct = Math.min(100, Math.round((completed / total) * 100));
+        this.elements.batchProgressBarFill.style.width = `${pct}%`;
+        this.elements.labelBatchPercentage.textContent = `${pct}%`;
+        this.elements.metricBatchChunk.textContent = `${completed} / ${total}`;
+
+        // Tempo decorrido
+        const elapsedSec = Math.round((performance.now() - this.batchStartTime) / 1000);
+        this.elements.metricBatchElapsed.textContent = this.formatTimerSeconds(elapsedSec);
+
+        // Estimativa restante (ETA)
+        if (completed > 0 && this.batchChunkLatencies.length > 0) {
+            const avgLatencySec = (this.batchChunkLatencies.reduce((a, b) => a + b, 0) / this.batchChunkLatencies.length) / 1000;
+            const remainingChunks = total - completed;
+            const etaSec = Math.max(0, Math.round(remainingChunks * avgLatencySec));
+            this.elements.metricBatchEta.textContent = `~${this.formatTimerSeconds(etaSec)}`;
+        } else {
+            this.elements.metricBatchEta.textContent = "Calculando...";
+        }
+
+        if (completed >= total) {
+            this.elements.labelBatchStatus.textContent = "Transcrição Concluída com Sucesso! 🎉";
+            this.elements.labelBatchStatus.style.color = "var(--accent-emerald)";
+            this.elements.metricBatchEta.textContent = "00:00";
+        } else {
+            this.elements.labelBatchStatus.textContent = `Processando bloco ${completed + 1} de ${total}...`;
+            this.elements.labelBatchStatus.style.color = "var(--text-primary)";
+        }
+    }
+
+    cancelBatchTranscription() {
+        if (this.batchChunkTimeout) {
+            clearTimeout(this.batchChunkTimeout);
+            this.batchChunkTimeout = null;
+        }
+
+        if (!this.isBatchProcessing && !this.isModelReady) {
+            this.isBatchCancelled = true;
+            this.elements.btnStartBatchTranscribe.disabled = false;
+            this.showToast("Operação cancelada.", "info");
+            return;
+        }
+
+        this.isBatchCancelled = true;
+        this.isBatchProcessing = false;
+
+        // Reinicia o Worker para interromper imediatamente qualquer inferência pesada presa em WASM
+        try {
+            if (this.worker) {
+                this.worker.terminate();
+                this.worker = null;
+            }
+        } catch (_) {}
+
+        this.initWorker();
+
+        this.elements.btnStartBatchTranscribe.disabled = false;
+        this.elements.btnCancelBatch.disabled = true;
+        this.elements.btnCancelBatch.textContent = "Cancelado";
+        this.elements.labelBatchStatus.textContent = "Transcrição interrompida pelo usuário.";
+        this.elements.labelBatchStatus.style.color = "var(--accent-amber)";
+        this.renderBatchResults();
+        this.showToast("Transcrição cancelada com sucesso.", "info");
+    }
+
+    finishBatchTranscription() {
+        if (this.batchChunkTimeout) {
+            clearTimeout(this.batchChunkTimeout);
+            this.batchChunkTimeout = null;
+        }
+
+        this.isBatchProcessing = false;
+        this.elements.btnStartBatchTranscribe.disabled = false;
+        this.updateBatchProgressUI(this.batchChunks.length, this.batchChunks.length);
+        if (this.elements.metricBatchEta) {
+            this.elements.metricBatchEta.textContent = "00:00";
+        }
+        this.renderBatchResults();
+        this.showToast("Transcrição completa finalizada com sucesso!");
+    }
+
+    // Renderiza os resultados no editor (com ou sem marcação de tempo)
+    renderBatchResults() {
+        const showTimestamps = this.elements.checkShowTimestamps.checked;
+        const editor = this.elements.longTranscriptionEditor;
+
+        if (showTimestamps) {
+            editor.value = this.batchResults
+                .map(item => `[${this.formatTimerSeconds(item.startSec)}] ${item.processedText}`)
+                .filter(Boolean)
+                .join("\n\n");
+        } else {
+            editor.value = this.batchResults
+                .map(item => item.processedText)
+                .filter(Boolean)
+                .join(" ");
+        }
+
+        editor.scrollTop = editor.scrollHeight;
+        this.updateLongEditorStats();
+    }
+
+    updateLongEditorStats() {
+        const text = this.elements.longTranscriptionEditor.value.trim();
+        const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+        const chars = this.elements.longTranscriptionEditor.value.length;
+
+        this.elements.longStatWords.textContent = words;
+        this.elements.longStatChars.textContent = chars;
+    }
+
+    // Exportações de Arquivo
+    downloadLongAsTxt() {
+        const text = this.elements.longTranscriptionEditor.value;
+        if (!text.trim()) {
+            this.showToast("Nenhum texto para baixar!", "info");
+            return;
+        }
+
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const filename = `${this.getExportBaseName()}_transcricao.txt`;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.showToast(`Arquivo baixado: ${filename}`);
+    }
+
+    downloadLongAsSrt() {
+        if (this.batchResults.length === 0) {
+            this.showToast("Nenhum bloco transcrito para gerar legendas!", "info");
+            return;
+        }
+
+        const formatSrtTime = (seconds) => {
+            const hrs = String(Math.floor(seconds / 3600)).padStart(2, '0');
+            const mins = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+            const secs = String(Math.floor(seconds % 60)).padStart(2, '0');
+            return `${hrs}:${mins}:${secs},000`;
+        };
+
+        let srtContent = "";
+        this.batchResults.forEach((item, index) => {
+            srtContent += `${index + 1}\n`;
+            srtContent += `${formatSrtTime(item.startSec)} --> ${formatSrtTime(item.endSec)}\n`;
+            srtContent += `${item.processedText}\n\n`;
+        });
+
+        const blob = new Blob([srtContent], { type: "application/x-subrip;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const filename = `${this.getExportBaseName()}_transcricao.srt`;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.showToast(`Legenda baixada: ${filename}`);
+    }
+
+    formatTimerSeconds(totalSeconds) {
+        const secNum = Math.floor(totalSeconds);
+        const hours = Math.floor(secNum / 3600);
+        const minutes = Math.floor((secNum % 3600) / 60);
+        const seconds = secNum % 60;
+
+        const hStr = String(hours).padStart(2, '0');
+        const mStr = String(minutes).padStart(2, '0');
+        const sStr = String(seconds).padStart(2, '0');
+
+        return `${hStr}:${mStr}:${sStr}`;
+    }
+
 }
 
 // Inicialização robusta para scripts com type="module"
