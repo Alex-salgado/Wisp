@@ -46,6 +46,7 @@ Cargo.lock
 
 # Código Fonte Desktop (Rust e Python) - Mantido apenas localmente
 src-tauri/
+desktop_python/
 native_engine.py
 release/**/*.py
 copy-assets.js
