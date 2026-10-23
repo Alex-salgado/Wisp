@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wisp - Ditador Pessoal Privado (100% Local)</title>
+    
+    <!-- Meta Tags Principais & SEO -->
+    <meta name="description" content="Ditador e transcritor de voz por IA 100% privado e local no seu navegador. Zero envio de áudio para servidores externos, funciona offline.">
+    <meta name="keywords" content="ditador de voz, transcrição de áudio, IA local, reconhecimento de voz, privacidade, ditado no navegador, speech to text, WebGPU, LGPD">
+    <meta name="author" content="Wisp">
+    <meta name="theme-color" content="#0e131f">
+
+    <!-- OpenGraph / Facebook / WhatsApp / LinkedIn -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Wisp - Ditador Pessoal Privado (100% Local)">
+    <meta property="og:description" content="Ditador e transcritor de voz por IA 100% privado e local no seu navegador. Zero envio de áudio para servidores externos.">
+    <meta property="og:image" content="assets/icon.png">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Wisp - Ditador Pessoal Privado (100% Local)">
+    <meta name="twitter:description" content="Ditador e transcritor de voz por IA 100% privado e local no seu navegador. Zero envio de áudio para servidores externos.">
+    <meta name="twitter:image" content="assets/icon.png">
+
+        <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Wisp">
+    <link rel="icon" type="image/png" href="assets/icon.png">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Wisp Python Desktop Native Bridge -->
+    <script>
+        window.__TAURI_INTERNALS__ = {
+            invoke: async function(cmd, args = {}) {
+                const res = await fetch(`/api/native/${cmd}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(args)
+                });
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error(text || `Erro ao executar ${cmd}`);
+                }
+                return await res.json();
+            },
+            listen: function(event, callback) {
+                if (event === "global-hotkey-toggle") {
+                    try {
+                        const sse = new EventSource("/api/hotkey/events");
+                        sse.onmessage = function(e) {
+                            try {
+                                const data = JSON.parse(e.data);
+                                if (data.action === "toggle_mic") {
+                                    callback();
+                                }
+                            } catch (_) {}
+                        };
+                    } catch (_) {}
+                }
+            }
+        };
+        window.isTauri = true;
+        window.__TAURI__ = {
+            core: { invoke: window.__TAURI_INTERNALS__.invoke },
+            invoke: window.__TAURI_INTERNALS__.invoke,
+            event: { listen: window.__TAURI_INTERNALS__.listen }
+        };
+    </script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="is-desktop">
+
+    <!-- Header Principal -->
+    <header>
+        <div class="logo-container">
+            <div class="logo-icon">🎙️</div>
+            <div class="logo-text">
+                <h1>Wisp</h1>
+                <div class="logo-tag">Ditador Pessoal Privado (100% Local)</div>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="desktop-badge" id="desktop-mode-badge" style="display: none;">🖥️ Desktop (Mouse Ativo)</span>
+            <div class="header-status-badge" id="system-status-badge">
+                <span class="status-dot" id="system-status-dot"></span>
+                <span id="system-status-text">Inicializando...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Container Principal da Aplicação -->
+    <main class="app-container">
+
+        <!-- Barra de Progresso de Download do Modelo -->
+        <div class="progress-card" id="model-progress-card">
+            <div class="progress-header">
+                <span id="progress-file-name">Baixando modelo de inteligência artificial para a memória do navegador...</span>
+                <span id="progress-percentage">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progress-bar-fill"></div>
+            </div>
+        </div>
+
+        <!-- Barra de Navegação por Abas -->
+        <nav class="tabs-nav" aria-label="Navegação do aplicativo">
+            <button class="tab-btn active" id="tab-btn-dictator" data-tab="tab-dictator">
+                🎙️ Ditador
+            </button>
+            <button class="tab-btn" id="tab-btn-long-audio" data-tab="tab-long-audio">
+                📁 Gravar & Arquivo
+            </button>
+            <button class="tab-btn" id="tab-btn-vocab" data-tab="tab-vocab">
+                📖 Vocabulário
+            </button>
+            <button class="tab-btn" id="tab-btn-history" data-tab="tab-history">
+                📜 Histórico
+            </button>
+            <button class="tab-btn" id="tab-btn-settings" data-tab="tab-settings">
+                ⚙️ Configurações
+            </button>
+            <button class="tab-btn" id="tab-btn-manual" data-tab="tab-manual">
+                📘 Manual
+            </button>
+        </nav>
+
+        <!-- ABA 1: DITADOR IA -->
+        <section class="tab-content active" id="tab-dictator">
+            <div class="dictator-grid">
+                
+                <!-- Painel de Controle Esquerdo -->
+                <!-- 1. Cartão do Microfone (Visível no topo no celular) -->
+                <div class="mic-card">
+                    <div class="mic-button-wrapper">
+                        <button class="mic-toggle-btn" id="btn-toggle-mic" title="Clique para Ligar ou Desligar o Microfone">
+                            🎤
+                        </button>
+                    </div>
+
+                    <div class="mic-info-wrapper">
+                        <div class="mic-status-label" id="mic-status-label">Microfone Desligado</div>
+                        <div class="mic-status-sub" id="mic-status-sub">Clique no botão para falar</div>
+                    </div>
+
+                    <!-- Medidor de Nível VU -->
+                    <div class="vu-meter-container">
+                        <div class="vu-label">Nível de Volume da Voz</div>
+                        <div class="vu-bar-bg">
+                            <div class="vu-bar-fill" id="vu-bar-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Área do Editor de Ditado (Logo abaixo do microfone no celular) -->
+                <div class="editor-card">
+                    <div class="editor-toolbar">
+                        <div class="toolbar-stats">
+                            <span>Palavras: <strong id="stat-word-count">0</strong></span>
+                            <span>Caracteres: <strong id="stat-char-count">0</strong></span>
+                            <span>Latência: <strong id="stat-latency">-- ms</strong></span>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button class="action-btn primary" id="btn-copy-text" title="Copiar todo o texto para a Área de Transferência">
+                                📋 Copiar Texto
+                            </button>
+                            <button class="action-btn" id="btn-download-txt" title="Baixar texto como arquivo .txt">
+                                💾 Baixar .TXT
+                            </button>
+                            <button class="action-btn danger" id="btn-clear-text" title="Limpar editor">
+                                🗑️ Limpar
+                            </button>
+                        </div>
+                    </div>
+
+                    <textarea 
+                        id="dictation-editor" 
+                        class="editor-textarea" 
+                        placeholder="Clique no microfone e comece a falar... O texto aparecerá aqui em tempo real com pontuação inteligente e comandos de voz!"
+                    ></textarea>
+                    </div>
+
+                <!-- 3. Opções Rápidas (Microfone, Modelo e Idioma) -->
+                <div class="options-card">
+                    <h4 class="options-card-title">⚙️ Parâmetros do Ditador</h4>
+                    <div class="quick-options">
+                        <div class="field-group">
+                            <label class="field-label" for="select-mic">Microfone de Entrada:</label>
+                            <select id="select-mic">
+                                <option value="">Microfone Padrão do Sistema</option>
+                            </select>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="field-label" for="select-model">Modelo de IA (In-Browser):</label>
+                            <select id="select-model">
+                                <option value="Xenova/whisper-tiny">Modelo Compacto (~39 MB - Ultra Rápido)</option>
+                                <option value="Xenova/whisper-base" selected>Modelo Padrão (~75 MB - Equilibrado - Recomendado)</option>
+                                <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Fidelidade e Precisão)</option>
+                                <option value="Xenova/whisper-medium" class="desktop-only-model">Modelo Profissional (~750 MB - Alta Precisão Desktop)</option>
+                                <option value="onnx-community/whisper-large-v3-turbo" class="desktop-only-model">Modelo Ultra Turbo (~800 MB - Máxima Inteligência)</option>
+                            </select>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="field-label" for="select-language">Idioma da Transcrição:</label>
+                            <select id="select-language">
+                                <option value="portuguese" selected>Português (Brasil)</option>
+                                <option value="english">Inglês</option>
+                                <option value="spanish">Espanhol</option>
+                            </select>
+                        </div>
+
+                        <button class="action-btn" id="btn-calibrate-noise" style="width: 100%; justify-content: center;">
+                            🎯 Calibrar Ruído da Sala
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+                <!-- ABA: ÁUDIO LONGO & ARQUIVOS -->
+        <section class="tab-content" id="tab-long-audio">
+            
+            <!-- Seletor de Modo (Gravar vs Importar) -->
+            <div class="long-audio-mode-selector">
+                <button type="button" class="mode-select-btn active" id="btn-mode-record">
+                    🎙️ Gravar Reunião / Áudio Longo
+                </button>
+                <button type="button" class="mode-select-btn" id="btn-mode-upload">
+                    📁 Importar Arquivo de Áudio (.mp3, .wav, .m4a)
+                </button>
+            </div>
+
+            <!-- PAINEL 1: GRAVADOR CONTÍNUO AO VIVO -->
+            <div class="card" id="panel-long-record">
+                <div class="long-record-header">
+                    <div class="record-badge" id="long-record-badge">
+                        <span class="record-pulse-dot" id="long-record-dot"></span>
+                        <span id="long-record-status-text">Pronto para iniciar gravação</span>
+                    </div>
+                    <div class="long-timer" id="long-record-timer">00:00:00</div>
+                </div>
+
+                <!-- Medidor de Nível VU para Gravação Longa -->
+                <div class="vu-meter-container" style="max-width: 480px; margin: 12px auto;">
+                    <div class="vu-label">Nível de Captação da Voz</div>
+                    <div class="vu-bar-bg">
+                        <div class="vu-bar-fill" id="long-vu-bar-fill"></div>
+                    </div>
+                </div>
+
+                <!-- Botões de Controle da Gravação -->
+                <div class="long-record-controls">
+                    <button class="action-btn primary large-btn" id="btn-long-start">
+                        🔴 Iniciar Gravação
+                    </button>
+                    <button class="action-btn large-btn" id="btn-long-pause" style="display: none;">
+                        ⏸️ Pausar
+                    </button>
+                    <button class="action-btn success large-btn" id="btn-long-finish" style="display: none;">
+                        ⏹️ Concluir Gravação
+                    </button>
+                    <button class="action-btn danger" id="btn-long-discard" style="display: none;">
+                        🗑️ Descartar
+                    </button>
+                </div>
+            </div>
+
+            <!-- PAINEL 2: IMPORTAÇÃO DE ARQUIVO DE ÁUDIO (DRAG & DROP) -->
+            <div class="card" id="panel-long-upload" style="display: none;">
+                <div class="dropzone" id="audio-dropzone">
+                    <input type="file" id="input-audio-file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac" style="display: none;">
+                    <div class="dropzone-icon">📥</div>
+                    <h4 class="dropzone-title">Arraste seu arquivo de áudio aqui ou clique para selecionar</h4>
+                    <p class="dropzone-sub">Formatos suportados: MP3, WAV, M4A, AAC, OGG, WEBM, FLAC (sem envio para nuvem, processado 100% no navegador)</p>
+                </div>
+            </div>
+
+            <!-- PAINEL 3: PRÉ-VISUALIZAÇÃO DO ÁUDIO PRONTO & CONFIGURAÇÃO DA TRANSCRIÇÃO -->
+            <div class="card" id="panel-audio-ready" style="display: none;">
+                <div class="audio-ready-header">
+                    <div>
+                        <h3 class="card-title" style="margin-bottom: 4px;">🎧 Áudio Preparado para Transcrição</h3>
+                        <p id="label-audio-info" style="color: var(--text-secondary); font-size: 0.9rem;">
+                            Duração: 00:00:00 | Amostras 16 kHz
+                        </p>
+                    </div>
+                    <button class="action-btn" id="btn-download-raw-audio">
+                        💾 Baixar Gravação (.wav)
+                    </button>
+                </div>
+
+                <!-- Player de Áudio Nativo -->
+                <audio id="audio-preview-player" controls style="width: 100%; margin: 16px 0; border-radius: var(--radius-sm); outline: none;"></audio>
+
+                <!-- Configuração de Modelo e Disparo -->
+                <div class="long-transcribe-settings">
+                    <div class="field-group" style="flex: 1; min-width: 250px;">
+                        <label class="field-label" for="select-long-model">Modelo de IA para Áudio Longo:</label>
+                        <select id="select-long-model">
+                            <option value="Xenova/whisper-tiny">Modelo Compacto (~39 MB - Mais Rápido)</option>
+                            <option value="Xenova/whisper-base" selected>Modelo Padrão (~75 MB - Equilibrado - Recomendado)</option>
+                            <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Fidelidade e Precisão)</option>
+                                <option value="Xenova/whisper-medium" class="desktop-only-model">Modelo Profissional (~750 MB - Alta Precisão Desktop)</option>
+                                <option value="onnx-community/whisper-large-v3-turbo" class="desktop-only-model">Modelo Ultra Turbo (~800 MB - Máxima Inteligência)</option>
+                        </select>
+                    </div>
+
+                    <div class="field-group" style="width: 200px;">
+                        <label class="field-label" for="select-long-lang">Idioma do Áudio:</label>
+                        <select id="select-long-lang">
+                            <option value="portuguese" selected>Português (Brasil)</option>
+                            <option value="english">Inglês</option>
+                            <option value="spanish">Espanhol</option>
+                        </select>
+                    </div>
+
+                    <button class="action-btn primary large-btn" id="btn-start-batch-transcribe" style="height: 44px; align-self: flex-end;">
+                        ⚡ Iniciar Transcrição Completa
+                    </button>
+                </div>
+
+                <div style="font-size: 0.83rem; color: var(--text-muted); margin-top: -6px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                    <span>💡 <em>Recomendação: O <strong>Modelo Padrão (75 MB)</strong> é o mais rápido e equilibrado para a maioria dos áudios. O <strong>Modelo Avançado (150 MB)</strong> oferece máxima fidelidade e vocabulário técnico para reuniões e aulas.</em></span>
+                </div>
+            </div>
+
+            <!-- PAINEL 4: BARRA DE PROGRESSO & MÉTRICAS EM TEMPO REAL -->
+            <div class="card" id="panel-batch-progress" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong id="label-batch-status" style="color: var(--primary);">Transcrevendo áudio em blocos...</strong>
+                    <span id="label-batch-percentage" style="font-weight: 700; color: #fff;">0%</span>
+                </div>
+
+                <div class="progress-bar-bg" style="height: 14px;">
+                    <div class="progress-bar-fill" id="batch-progress-bar-fill" style="width: 0%;"></div>
+                </div>
+
+                <div class="batch-metrics-row">
+                    <span>Bloco: <strong id="metric-batch-chunk">0 / 0</strong></span>
+                    <span>Decorrido: <strong id="metric-batch-elapsed">00:00</strong></span>
+                    <span>Estimativa Restante: <strong id="metric-batch-eta">Calculando...</strong></span>
+                    <button class="action-btn danger" id="btn-cancel-batch" style="padding: 4px 12px; font-size: 0.85rem;">
+                        ⏹️ Cancelar Transcrição
+                    </button>
+                </div>
+            </div>
+
+            <!-- PAINEL 5: RESULTADO DA TRANSCRIÇÃO & EXPORTAÇÕES -->
+            <div class="card" id="panel-batch-results" style="display: none;">
+                <div class="editor-toolbar" style="border-radius: var(--radius-sm); margin-bottom: 12px;">
+                    <div class="toolbar-stats">
+                        <span>Palavras: <strong id="long-stat-words">0</strong></span>
+                        <span>Caracteres: <strong id="long-stat-chars">0</strong></span>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-secondary); cursor: pointer;">
+                            <input type="checkbox" id="check-show-timestamps" checked>
+                            Exibir com Timestamps ([00:00])
+                        </label>
+                        <button class="action-btn primary" id="btn-copy-long-result">📋 Copiar</button>
+                        <button class="action-btn" id="btn-download-long-txt">💾 Baixar .TXT</button>
+                        <button class="action-btn" id="btn-download-long-srt">⏱️ Baixar .SRT (Legenda)</button>
+                        <button class="action-btn danger" id="btn-clear-long-result">🗑️ Limpar</button>
+                    </div>
+                </div>
+
+                <textarea 
+                    id="long-transcription-editor" 
+                    class="editor-textarea" 
+                    placeholder="O texto transcrito dos blocos de áudio aparecerá aqui conforme for processado..."
+                ></textarea>
+            </div>
+
+        </section>
+
+
+        <!-- ABA 2: VOCABULÁRIO & REGRAS -->
+        <section class="tab-content" id="tab-vocab">
+            <div class="card">
+                <h3 class="card-title">✨ Vocabulário Prioritário (Hotwords)</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
+                    Palavras, termos técnicos e nomes próprios que o modelo de IA deve priorizar durante a inferência.
+                </p>
+
+                <form class="inline-form" id="form-add-vocab">
+                    <input type="text" id="input-new-vocab" placeholder="Ex: Wisp, Inteligência Artificial, WhatsApp" required>
+                    <button type="submit" class="action-btn primary" id="btn-add-vocab">+ Adicionar Termo</button>
+                </form>
+
+                <div class="table-wrapper">
+                    <table id="table-vocab">
+                        <thead>
+                            <tr>
+                                <th>Termo Prioritário</th>
+                                <th style="width: 100px; text-align: center;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-vocab">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">🔄 Regras de Auto-Correção ("Quando ouve X ➔ substitui por Y")</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
+                    Corrija vícios de linguagem ou palavras frequentemente mal interpretadas pelo microfone.
+                </p>
+
+                <form class="inline-form" id="form-add-rule">
+                    <input type="text" id="input-rule-from" placeholder="Quando o modelo entender (ex: ia)" required>
+                    <input type="text" id="input-rule-to" placeholder="Substituir por (ex: IA)" required>
+                    <button type="submit" class="action-btn primary" id="btn-add-rule">+ Adicionar Regra</button>
+                </form>
+
+                <div class="table-wrapper">
+                    <table id="table-rules">
+                        <thead>
+                            <tr>
+                                <th>Texto Ouvido</th>
+                                <th>Substituição Correta</th>
+                                <th style="width: 100px; text-align: center;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-rules">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 3: HISTÓRICO DE FRASES -->
+        <section class="tab-content" id="tab-history">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                    <h3 class="card-title" style="margin-bottom: 0;">📜 Histórico Recente de Transcrições</h3>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="action-btn" id="btn-copy-history">📋 Copiar Todo Histórico</button>
+                        <button class="action-btn danger" id="btn-clear-history">🗑️ Limpar Histórico</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table id="table-history">
+                        <thead>
+                            <tr>
+                                <th style="width: 110px;">Horário</th>
+                                <th>Frase Transcrita</th>
+                                <th style="width: 120px; text-align: center;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-history">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 4: CONFIGURAÇÕES -->
+        <section class="tab-content" id="tab-settings">
+            <!-- Painel de Hardware e Aceleração Desktop (exclusivo para Modo Desktop) -->
+            <div class="card" id="desktop-hardware-card" style="display: none; border: 1px solid rgba(16, 185, 129, 0.35); background: linear-gradient(145deg, rgba(16, 185, 129, 0.06) 0%, rgba(30, 41, 59, 0.5) 100%);">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <h3 class="card-title" style="margin-bottom: 0; color: #10b981;">🚀 Aceleração de Hardware & Modelos Desktop</h3>
+                    <span class="desktop-badge" style="font-size: 0.75rem;">Processo 64-bit Nativo</span>
+                </div>
+                <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 8px;">
+                    No modo Desktop nativo, o teto de 2 GB de memória da sandbox do navegador é removido. Os modelos <strong>Profissional (~750 MB)</strong> e <strong>Ultra Turbo (~800 MB)</strong> foram desbloqueados para máxima precisão de reconhecimento.
+                </p>
+                <div id="desktop-hardware-specs" style="margin-top: 12px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.85rem;">
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">⚙️ Parâmetros de Captura & Áudio</h3>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <h4>Avisos Sonoros (Beeps)</h4>
+                        <p>Emite um sinal sonoro sintetizado suave ao ativar ou desativar o microfone.</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-sound-feedback" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <h4>Comandos de Voz para Pontuação</h4>
+                        <p>Converte comandos falados como "vírgula", "ponto final" e "ponto de exclamação".</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-voice-punctuation" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <h4>Comando de Voz "Entra"</h4>
+                        <p>Insere uma quebra de linha física no editor ao pronunciar a palavra "entra".</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-voice-enter" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                                <div class="toggle-row" id="desktop-hotkey-row" style="display: none;">
+                    <div class="toggle-info">
+                        <h4>⌨️ Atalho Global de Ditado (Desktop)</h4>
+                        <p>Pressione este atalho em qualquer aplicativo do Windows para ligar ou desligar o microfone instantaneamente.</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="input-global-hotkey" value="Ctrl+F8" style="width: 120px; text-align: center; font-weight: 700; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                        <button id="btn-save-hotkey" class="action-btn" style="padding: 6px 14px; font-size: 0.82rem; cursor: pointer;">Salvar</button>
+                    </div>
+                </div>
+
+<div class="toggle-row" id="setting-inject-mouse-row">
+                    <div class="toggle-info">
+                        <h4>🎯 Inserir Texto Direto no Cursor do Mouse</h4>
+                        <p id="setting-inject-mouse-desc">Digita automaticamente na janela onde o mouse estiver apontado (Word, Bloco de Notas, Navegador, etc.).</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-inject-mouse" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row" id="setting-click-before-row">
+                    <div class="toggle-info">
+                        <h4>Comportamento do Cursor e Mouse:</h4>
+                        <p>Focar no local do mouse antes de digitar (clica suavemente onde o ponteiro está, sem movê-lo). <span style="color: var(--accent);">Deixe desmarcado para que frases sucessivas continuem na mesma linha sem sobreposição.</span></p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-click-before">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 16px;">
+                    <div class="field-group">
+                        <div style="display: flex; justify-content: space-between;">
+                            <label class="field-label" for="setting-pause-duration">Tempo de Silêncio para Concluir a Frase (segundos):</label>
+                            <span id="label-pause-val" style="color: var(--primary); font-weight: 700;">0.75 s</span>
+                        </div>
+                        <input type="range" id="setting-pause-duration" min="0.4" max="2.0" step="0.05" value="0.75">
+                    </div>
+
+                    <div class="field-group">
+                        <div style="display: flex; justify-content: space-between;">
+                            <label class="field-label" for="setting-silence-threshold">Sensibilidade do Microfone (Limiar de Energia):</label>
+                            <span id="label-threshold-val" style="color: var(--primary); font-weight: 700;">0.015</span>
+                        </div>
+                        <input type="range" id="setting-silence-threshold" min="0.005" max="0.06" step="0.001" value="0.015">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">💾 Backup & Portabilidade do Perfil</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.9rem;">
+                    Exporte todo o seu vocabulário, regras de correção e configurações para levar a qualquer outro navegador ou computador.
+                </p>
+
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button class="action-btn primary" id="btn-export-profile">
+                        📤 Exportar Perfil Completo (.json)
+                    </button>
+                    <label class="action-btn" for="input-import-profile" style="cursor: pointer;">
+                        📥 Importar Perfil (.json)
+                        <input type="file" id="input-import-profile" accept=".json" style="display: none;">
+                    </label>
+                    <button class="action-btn danger" id="btn-reset-profile">
+                        🔄 Restaurar Padrões de Fábrica
+                    </button>
+                </div>
+            </div>
+                    <div class="card">
+                <h3 class="card-title">💾 Armazenamento & Cache dos Modelos de IA</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
+                    Os modelos de IA ficam salvos localmente na memória e no cache do navegador (IndexedDB) para carregarem instantaneamente e funcionarem offline. Se desejar desocupar espaço no disco, você pode limpar esse cache a qualquer momento.
+                </p>
+
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <button class="action-btn danger" id="btn-clear-model-cache">
+                        🗑️ Liberar Cache de Modelos IA
+                    </button>
+                    <span id="label-cache-status" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 5: MANUAL & PRIVACIDADE -->
+        <section class="tab-content" id="tab-manual">
+            <!-- Banner de Privacidade Absoluta -->
+            <div class="card" style="border: 1px solid rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(20, 23, 34, 0.9));">
+                <h3 class="card-title" style="color: #34d399;">
+                    🔒 Privacidade Absoluta & Segurança Total (In-Browser AI)
+                </h3>
+                <p style="font-size: 1.05rem; line-height: 1.7; color: #e2e8f0; margin-bottom: 16px;">
+                    O <strong>Wisp</strong> é construído sob a premissa de <strong>Privacidade por Design (Privacy by Design)</strong>.
+                    Diferente da maioria das soluções de transcrição de voz da internet, <strong>aqui sua voz NUNCA sai do seu dispositivo</strong>.
+                </p>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">💻 100% Processamento Local</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            O modelo de IA roda diretamente na memória RAM e na placa de vídeo (WebGPU) do seu navegador. Zero envio de áudio para servidores externos.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">🛡️ Nenhuma Gravação em Nuvem</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Nenhum áudio, texto ou dado pessoal é armazenado em servidores remotos. Ninguém além de você escuta ou tem acesso ao que você fala.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">🌐 Funciona 100% Offline</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Após baixar o modelo pela primeira vez para o cache do seu navegador (IndexedDB), você pode até desligar a internet que a transcrição continuará funcionando perfeitamente!
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                        <h4 style="color: #6ee7b7; margin-bottom: 8px;">⚖️ 100% Compatível com LGPD</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Ideal para profissionais que lidam com dados sensíveis, advogados, médicos e empresas com rigorosas políticas de confidencialidade e sigilo.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guia de Uso: Áudio Longo & Arquivos -->
+            <div class="card" style="border-left: 4px solid var(--accent-cyan);">
+                <h3 class="card-title" style="color: var(--accent-cyan);">📁 Guia: Gravação Contínua & Arquivos de Áudio</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.95rem; line-height: 1.6;">
+                    A aba <strong>📁 Gravar & Arquivo</strong> foi projetada para gravações longas sem interrupções (reuniões, aulas, entrevistas, palestras) e para transcrever arquivos de áudio que você já possui gravados no seu dispositivo.
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                    <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <h4 style="color: #67e8f9; margin-bottom: 8px;">🎙️ Modo 1: Gravação Contínua</h4>
+                        <ol style="margin-left: 18px; color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+                            <li>Acesse a aba <strong>📁 Gravar & Arquivo</strong> e selecione o modo <em>"🎙️ Gravar Áudio Longo"</em>.</li>
+                            <li>Clique em <strong>"Iniciar Gravação Contínua"</strong>. O sistema grava continuamente sem parar pelo silêncio.</li>
+                            <li>Use <strong>Pausar</strong> se precisar respirar ou pausar a reunião.</li>
+                            <li>Ao terminar, clique em <strong>"Finalizar e Preparar"</strong>. O player de áudio exibirá a duração e tamanho do áudio.</li>
+                        </ol>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <h4 style="color: #67e8f9; margin-bottom: 8px;">📤 Modo 2: Carregar Arquivo de Áudio</h4>
+                        <ol style="margin-left: 18px; color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+                            <li>Na aba <strong>📁 Gravar & Arquivo</strong>, selecione <em>"📤 Carregar Arquivo de Áudio"</em>.</li>
+                            <li>Arraste ou clique para selecionar seu arquivo (suporta <strong>.mp3, .wav, .m4a, .ogg, .webm</strong>).</li>
+                            <li>O arquivo é decodificado 100% no seu navegador sem ser enviado a nenhum servidor na internet.</li>
+                        </ol>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <h4 style="color: #67e8f9; margin-bottom: 8px;">⚡ Transcrição Inteligente em Lote</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+                            • O áudio é fatiado automaticamente em blocos de <strong>25 segundos</strong>.<br>
+                            • Acompanhe o progresso em tempo real (barra azul, tempo decorrido e estimativa restante).<br>
+                            • O texto é escrito bloco a bloco na tela em largura total.<br>
+                            • Você pode cancelar a qualquer momento sem perder o texto já processado.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.25); padding: 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <h4 style="color: #67e8f9; margin-bottom: 8px;">💾 Exportações & Legendas (.SRT)</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6;">
+                            • <strong>Exibir com Timestamps:</strong> Ative a caixa de seleção para visualizar marcadores de tempo como <code>[00:01:15]</code> no texto.<br>
+                            • <strong>Baixar .TXT:</strong> Salva a transcrição completa formatada com nome automático padronizado.<br>
+                            • <strong>Baixar .SRT:</strong> Gera arquivo de legenda profissional sincronizado, compatível com YouTube, VLC e editores de vídeo.<br>
+                            • <strong>Baixar Áudio (.WAV):</strong> Salve uma cópia do áudio bruto gravado para guardar no seu computador.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guia de Uso Rápido: Ditador -->
+            <div class="card">
+                <h3 class="card-title">📖 Guia Rápido: Ditador em Tempo Real</h3>
+                <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
+                    <div style="display: flex; gap: 14px; align-items: flex-start;">
+                        <span style="background: var(--primary); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">1</span>
+                        <div>
+                            <strong style="color: #fff; font-size: 1rem;">Ligue o Microfone</strong>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+                                Na aba "Ditador IA", clique no botão circular grande do microfone (conceda permissão no navegador se for a primeira vez).
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 14px; align-items: flex-start;">
+                        <span style="background: var(--primary); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">2</span>
+                        <div>
+                            <strong style="color: #fff; font-size: 1rem;">Fale Normalmente</strong>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+                                Fale no seu ritmo habitual. O sistema detecta automaticamente pausas na fala, transcreve em tempo real e insere o texto diretamente no editor.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 14px; align-items: flex-start;">
+                        <span style="background: var(--primary); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">3</span>
+                        <div>
+                            <strong style="color: #fff; font-size: 1rem;">Copie ou Baixe o Resultado</strong>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+                                Ao concluir o ditado, use o botão <strong>"Copiar Texto"</strong> para colar no WhatsApp, Word, e-mail ou no seu software de preferência, ou clique em <strong>"Baixar .TXT"</strong>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabela Completa de Comandos de Voz -->
+            <div class="card">
+                <h3 class="card-title">🎙️ Tabela de Comandos de Voz Disponíveis</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 14px; font-size: 0.9rem;">
+                    Você pode ditar pontuações e comandos a qualquer momento. O sistema continuará inserindo pontuações automáticas normalmente pela entonação da sua voz.
+                </p>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>O que você fala</th>
+                                <th style="width: 140px; text-align: center;">O que é inserido</th>
+                                <th>Exemplo Prático</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>"vírgula"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--primary); font-size: 1.2rem;">,</strong></td>
+                                <td>"Olá vírgula tudo bem" ➔ <em>Olá, tudo bem</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"ponto final"</code> ou <code>"ponto"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--primary); font-size: 1.2rem;">.</strong></td>
+                                <td>"Terminei o relatório ponto" ➔ <em>Terminei o relatório.</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"ponto de exclamação"</code> ou <code>"exclamação"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--accent-amber); font-size: 1.2rem;">!</strong></td>
+                                <td>"Parabéns pelo trabalho exclamação" ➔ <em>Parabéns pelo trabalho!</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"ponto de interrogação"</code> ou <code>"interrogação"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--accent-cyan); font-size: 1.2rem;">?</strong></td>
+                                <td>"Qual é o prazo interrogação" ➔ <em>Qual é o prazo?</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"dois pontos"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--primary); font-size: 1.2rem;">:</strong></td>
+                                <td>"Atenção dois pontos verificar valores" ➔ <em>Atenção: verificar valores</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"ponto e vírgula"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--primary); font-size: 1.2rem;">;</strong></td>
+                                <td>"Primeiro item ponto e vírgula segundo item" ➔ <em>Primeiro item; segundo item</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"nova linha"</code> ou <code>"parágrafo"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--accent-green); font-size: 1.2rem;">↵ Quebra</strong></td>
+                                <td>"Título nova linha Corpo do texto" ➔ <em>Pula para a linha de baixo</em></td>
+                            </tr>
+                            <tr>
+                                <td><code>"entra"</code></td>
+                                <td style="text-align: center;"><strong style="color: var(--accent-green); font-size: 1.2rem;">↵ Enter</strong></td>
+                                <td>Diga <strong>"entra"</strong> para dar enter e criar uma nova linha imediatamente</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Modelos e Dicas de Precisão -->
+            <div class="card">
+                <h3 class="card-title">💡 Dicas para Máxima Precisão</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 10px;">
+                    <div>
+                        <h4 style="color: #93c5fd; margin-bottom: 6px;">🧠 Escolha do Modelo de IA</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            • <strong>Modelo Compacto (~39 MB)</strong>: Ultra leve e instantâneo. Ideal para celulares e computadores básicos.<br>
+                            • <strong>Modelo Padrão (~75 MB)</strong>: Equilíbrio perfeito entre velocidade e precisão. Excelente para o dia a dia.<br>
+                            • <strong>Modelo Avançado (~150 MB)</strong>: Máxima precisão e vocabulário técnico para reuniões, aulas e áudios longos, com 100% de estabilidade na memória do navegador.
+                        </p>
+                    </div>
+
+                    <div>
+                        <h4 style="color: #93c5fd; margin-bottom: 6px;">🎯 Calibração de Ruído</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Antes de começar uma sessão de gravação, clique no botão <strong>"Calibrar Ruído da Sala"</strong> na barra lateral e fique em silêncio por 2 segundos. O sistema ajusta a sensibilidade do microfone automaticamente ao barulho do seu ambiente.
+                        </p>
+                    </div>
+
+                    <div>
+                        <h4 style="color: #93c5fd; margin-bottom: 6px;">✨ Vocabulário Personalizado</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Se você costuma usar termos da sua profissão, nomes de pessoas ou jargões técnicos, adicione-os na aba <strong>"Vocabulário & Regras"</strong>. O modelo de IA priorizará esses termos automaticamente durante a transcrição!
+                        </p>
+                    </div>
+                </div>
+            </div>
+                    <!-- Guia Exclusivo da Versão Desktop -->
+            <div class="card" style="border: 1px solid rgba(59, 130, 246, 0.4); background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(20, 23, 34, 0.9));">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                    <h3 class="card-title" style="color: #60a5fa; margin-bottom: 0;">
+                        🖥️ Guia Exclusivo: Recursos da Versão Desktop
+                    </h3>
+                    <span class="desktop-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.35);">
+                        Disponível no Wisp Desktop
+                    </span>
+                </div>
+                <p style="font-size: 0.98rem; line-height: 1.6; color: #cbd5e1; margin-bottom: 16px;">
+                    A versão instalada do <strong>Wisp Desktop</strong> remove as restrições da sandbox dos navegadores web e conecta a inteligência artificial diretamente aos recursos do seu sistema operacional Windows.
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+                        <h4 style="color: #93c5fd; margin-bottom: 8px;">🎯 1. Injeção Direta no Cursor do Mouse</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Coloque o mouse em qualquer caixa de texto do Windows (<strong>Word, Excel, Bloco de Notas, WhatsApp Desktop, Slack, VS Code ou navegadores</strong>). O Wisp detecta a janela sob o mouse, foca suavemente e digita tudo o que você fala sem você precisar dar Ctrl+C e Ctrl+V.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+                        <h4 style="color: #93c5fd; margin-bottom: 8px;">⌨️ 2. Atalho Global do Sistema (Ctrl + F8)</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Você não precisa trocar de janela para ligar o microfone! Pressione <strong>Ctrl + F8</strong> de qualquer tela do seu computador para iniciar o ditado, fale normalmente e pressione <strong>Ctrl + F8</strong> novamente para concluir. O atalho é 100% customizável na aba de Configurações.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+                        <h4 style="color: #93c5fd; margin-bottom: 8px;">🕒 3. Minimizado na Bandeja (System Tray)</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Ao clicar no botão "X" para fechar, o Wisp não é encerrado: ele se oculta silenciosamente na bandeja do Windows (ao lado do relógio). Basta usar o atalho <strong>Ctrl + F8</strong> a qualquer momento, ou dar um clique simples no ícone da bandeja para abrir e fechar a janela.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+                        <h4 style="color: #93c5fd; margin-bottom: 8px;">👑 4. Modelos Maiores e Mais Precisos</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Diferente da versão web que possui teto de 2 GB de memória, a versão Desktop roda em processo nativo 64-bit com acesso à memória RAM total da sua máquina. Desbloqueia o <strong>Modelo Profissional (~750 MB)</strong> e o <strong>Modelo Ultra Turbo (~800 MB)</strong> com acurácia máxima.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- ÁREA: SOBRE O DESENVOLVEDOR (Altere aqui suas informações) -->
+            <!-- ======================================================== -->
+            <div class="card" style="border: 1px solid rgba(168, 85, 247, 0.35); background: linear-gradient(135deg, rgba(168, 85, 247, 0.06), rgba(20, 23, 34, 0.95));">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                    <h3 class="card-title" style="color: #c084fc; margin-bottom: 0;">
+                        👨‍💻 Sobre o Desenvolvedor
+                    </h3>
+                    <span style="font-size: 0.8rem; padding: 4px 10px; border-radius: 20px; background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">
+                        Criador do Projeto Wisp
+                    </span>
+                </div>
+
+                <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin-top: 14px;">
+                    <div style="width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #a855f7, #6366f1); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; flex-shrink: 0; box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);">
+                        AS
+                    </div>
+
+                    <div style="flex: 1; min-width: 250px;">
+                        <h4 style="font-size: 1.15rem; color: #f1f5f9; margin-bottom: 4px;">Alex Salgado</h4>
+                        <div style="font-size: 0.88rem; color: #a855f7; font-weight: 600; margin-bottom: 10px;">Engenharia de Software & Inteligência Artificial Aplicada</div>
+                        
+                        <p style="font-size: 0.92rem; color: #94a3b8; line-height: 1.6; margin-bottom: 14px;">
+                            O <strong>Wisp</strong> foi desenvolvido com o propósito de unir alta performance, inteligência artificial de ponta e privacidade absoluta. 
+                            Toda a inferência é executada 100% no dispositivo do usuário, garantindo produtividade máxima sem depender de conexões com a nuvem ou abrir mão do sigilo dos seus dados.
+                        </p>
+
+                        <!-- Links Sociais e Profissionais -->
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <a href="https://github.com/Alex-salgado" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #e2e8f0; text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;">
+                                🐙 GitHub
+                            </a>
+                            <a href="https://alex-salgado.github.io/Wisp/" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.25); color: #93c5fd; text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;">
+                                🌐 Wisp Web Online
+                            </a>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); color: #6ee7b7; font-size: 0.85rem; font-weight: 600;">
+                                🔒 100% Local & Privado
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Container de Toasts de Notificação -->
+    <div id="toast-container" aria-live="polite"></div>
+
+    <!-- Scripts da Aplicação -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

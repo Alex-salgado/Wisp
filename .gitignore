@@ -4,10 +4,14 @@ env/
 venv/
 ENV/
 
-# Python Cache
+# Python Cache & Builds
 __pycache__/
 *.py[cod]
 *.class
+build/
+**/build/
+dist/
+**/dist/
 
 # Node / NPM
 node_modules/
