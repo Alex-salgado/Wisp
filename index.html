@@ -37,7 +37,7 @@
     
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="is-desktop">
 
     <!-- Header Principal -->
     <header>
@@ -49,9 +49,12 @@
             </div>
         </div>
 
-        <div class="header-status-badge" id="system-status-badge">
-            <span class="status-dot" id="system-status-dot"></span>
-            <span id="system-status-text">Inicializando...</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="desktop-badge" id="desktop-mode-badge" style="display: none;">🖥️ Desktop (Mouse Ativo)</span>
+            <div class="header-status-badge" id="system-status-badge">
+                <span class="status-dot" id="system-status-dot"></span>
+                <span id="system-status-text">Inicializando...</span>
+            </div>
         </div>
     </header>
 
@@ -163,6 +166,8 @@
                                 <option value="Xenova/whisper-tiny">Modelo Compacto (~39 MB - Ultra Rápido)</option>
                                 <option value="Xenova/whisper-base" selected>Modelo Padrão (~75 MB - Equilibrado - Recomendado)</option>
                                 <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Fidelidade e Precisão)</option>
+                                <option value="Xenova/whisper-medium" class="desktop-only-model">Modelo Profissional (~750 MB - Alta Precisão Desktop)</option>
+                                <option value="onnx-community/whisper-large-v3-turbo" class="desktop-only-model">Modelo Ultra Turbo (~800 MB - Máxima Inteligência)</option>
                             </select>
                         </div>
 
@@ -267,6 +272,8 @@
                             <option value="Xenova/whisper-tiny">Modelo Compacto (~39 MB - Mais Rápido)</option>
                             <option value="Xenova/whisper-base" selected>Modelo Padrão (~75 MB - Equilibrado - Recomendado)</option>
                             <option value="Xenova/whisper-small">Modelo Avançado (~150 MB - Alta Fidelidade e Precisão)</option>
+                                <option value="Xenova/whisper-medium" class="desktop-only-model">Modelo Profissional (~750 MB - Alta Precisão Desktop)</option>
+                                <option value="onnx-community/whisper-large-v3-turbo" class="desktop-only-model">Modelo Ultra Turbo (~800 MB - Máxima Inteligência)</option>
                         </select>
                     </div>
 
@@ -427,6 +434,19 @@
 
         <!-- ABA 4: CONFIGURAÇÕES -->
         <section class="tab-content" id="tab-settings">
+            <!-- Painel de Hardware e Aceleração Desktop (exclusivo para Modo Desktop) -->
+            <div class="card" id="desktop-hardware-card" style="display: none; border: 1px solid rgba(16, 185, 129, 0.35); background: linear-gradient(145deg, rgba(16, 185, 129, 0.06) 0%, rgba(30, 41, 59, 0.5) 100%);">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <h3 class="card-title" style="margin-bottom: 0; color: #10b981;">🚀 Aceleração de Hardware & Modelos Desktop</h3>
+                    <span class="desktop-badge" style="font-size: 0.75rem;">Processo 64-bit Nativo</span>
+                </div>
+                <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 8px;">
+                    No modo Desktop nativo, o teto de 2 GB de memória da sandbox do navegador é removido. Os modelos <strong>Profissional (~750 MB)</strong> e <strong>Ultra Turbo (~800 MB)</strong> foram desbloqueados para máxima precisão de reconhecimento.
+                </p>
+                <div id="desktop-hardware-specs" style="margin-top: 12px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.85rem;">
+                </div>
+            </div>
+
             <div class="card">
                 <h3 class="card-title">⚙️ Parâmetros de Captura & Áudio</h3>
 
@@ -459,6 +479,39 @@
                     </div>
                     <label class="switch">
                         <input type="checkbox" id="setting-voice-enter" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                                <div class="toggle-row" id="desktop-hotkey-row" style="display: none;">
+                    <div class="toggle-info">
+                        <h4>⌨️ Atalho Global de Ditado (Desktop)</h4>
+                        <p>Pressione este atalho em qualquer aplicativo do Windows para ligar ou desligar o microfone instantaneamente.</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="input-global-hotkey" value="Ctrl+F8" style="width: 120px; text-align: center; font-weight: 700; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                        <button id="btn-save-hotkey" class="action-btn" style="padding: 6px 14px; font-size: 0.82rem; cursor: pointer;">Salvar</button>
+                    </div>
+                </div>
+
+<div class="toggle-row" id="setting-inject-mouse-row">
+                    <div class="toggle-info">
+                        <h4>🎯 Inserir Texto Direto no Cursor do Mouse</h4>
+                        <p id="setting-inject-mouse-desc">Digita automaticamente na janela onde o mouse estiver apontado (Word, Bloco de Notas, Navegador, etc.).</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-inject-mouse" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row" id="setting-click-before-row">
+                    <div class="toggle-info">
+                        <h4>Comportamento do Cursor e Mouse:</h4>
+                        <p>Focar no local do mouse antes de digitar (clica suavemente onde o ponteiro está, sem movê-lo). <span style="color: var(--accent);">Deixe desmarcado para que frases sucessivas continuem na mesma linha sem sobreposição.</span></p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="setting-click-before">
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -734,6 +787,94 @@
                     </div>
                 </div>
             </div>
+                    <!-- Guia Exclusivo da Versão Desktop -->
+            <div class="card" style="border: 1px solid rgba(59, 130, 246, 0.4); background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(20, 23, 34, 0.9));">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                    <h3 class="card-title" style="color: #60a5fa; margin-bottom: 0;">
+                        🖥️ Guia Exclusivo: Recursos da Versão Desktop
+                    </h3>
+                    <span class="desktop-badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.35);">
+                        Disponível no Wisp Desktop
+                    </span>
+                </div>
+                <p style="font-size: 0.98rem; line-height: 1.6; color: #cbd5e1; margin-bottom: 16px;">
+                    A versão instalada do <strong>Wisp Desktop</strong> remove as restrições da sandbox dos navegadores web e conecta a inteligência artificial diretamente aos recursos do seu sistema operacional Windows.
+                </p>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+                        <h4 style="color: #93c5fd; margin-bottom: 8px;">🎯 1. Injeção Direta no Cursor do Mouse</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Coloque o mouse em qualquer caixa de texto do Windows (<strong>Word, Excel, Bloco de Notas, WhatsApp Desktop, Slack, VS Code ou navegadores</strong>). O Wisp detecta a janela sob o mouse, foca suavemente e digita tudo o que você fala sem você precisar dar Ctrl+C e Ctrl+V.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+                        <h4 style="color: #93c5fd; margin-bottom: 8px;">⌨️ 2. Atalho Global do Sistema (Ctrl + F8)</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Você não precisa trocar de janela para ligar o microfone! Pressione <strong>Ctrl + F8</strong> de qualquer tela do seu computador para iniciar o ditado, fale normalmente e pressione <strong>Ctrl + F8</strong> novamente para concluir. O atalho é 100% customizável na aba de Configurações.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+                        <h4 style="color: #93c5fd; margin-bottom: 8px;">🕒 3. Minimizado na Bandeja (System Tray)</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Ao clicar no botão "X" para fechar, o Wisp não é encerrado: ele se oculta silenciosamente na bandeja do Windows (ao lado do relógio). Basta usar o atalho <strong>Ctrl + F8</strong> a qualquer momento, ou dar um clique simples no ícone da bandeja para abrir e fechar a janela.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.3); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+                        <h4 style="color: #93c5fd; margin-bottom: 8px;">👑 4. Modelos Maiores e Mais Precisos</h4>
+                        <p style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
+                            Diferente da versão web que possui teto de 2 GB de memória, a versão Desktop roda em processo nativo 64-bit com acesso à memória RAM total da sua máquina. Desbloqueia o <strong>Modelo Profissional (~750 MB)</strong> e o <strong>Modelo Ultra Turbo (~800 MB)</strong> com acurácia máxima.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- ÁREA: SOBRE O DESENVOLVEDOR (Altere aqui suas informações) -->
+            <!-- ======================================================== -->
+            <div class="card" style="border: 1px solid rgba(168, 85, 247, 0.35); background: linear-gradient(135deg, rgba(168, 85, 247, 0.06), rgba(20, 23, 34, 0.95));">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                    <h3 class="card-title" style="color: #c084fc; margin-bottom: 0;">
+                        👨‍💻 Sobre o Desenvolvedor
+                    </h3>
+                    <span style="font-size: 0.8rem; padding: 4px 10px; border-radius: 20px; background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">
+                        Criador do Projeto Wisp
+                    </span>
+                </div>
+
+                <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin-top: 14px;">
+                    <div style="width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(135deg, #a855f7, #6366f1); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 700; color: #fff; flex-shrink: 0; box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);">
+                        AS
+                    </div>
+
+                    <div style="flex: 1; min-width: 250px;">
+                        <h4 style="font-size: 1.15rem; color: #f1f5f9; margin-bottom: 4px;">Alex Salgado</h4>
+                        <div style="font-size: 0.88rem; color: #a855f7; font-weight: 600; margin-bottom: 10px;">Engenharia de Software & Inteligência Artificial Aplicada</div>
+                        
+                        <p style="font-size: 0.92rem; color: #94a3b8; line-height: 1.6; margin-bottom: 14px;">
+                            O <strong>Wisp</strong> foi desenvolvido com o propósito de unir alta performance, inteligência artificial de ponta e privacidade absoluta. 
+                            Toda a inferência é executada 100% no dispositivo do usuário, garantindo produtividade máxima sem depender de conexões com a nuvem ou abrir mão do sigilo dos seus dados.
+                        </p>
+
+                        <!-- Links Sociais e Profissionais -->
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <a href="https://github.com/Alex-salgado" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #e2e8f0; text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;">
+                                🐙 GitHub
+                            </a>
+                            <a href="https://alex-salgado.github.io/Wisp/" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.25); color: #93c5fd; text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;">
+                                🌐 Wisp Web Online
+                            </a>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); color: #6ee7b7; font-size: 0.85rem; font-weight: 600;">
+                                🔒 100% Local & Privado
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </section>
 
     </main>

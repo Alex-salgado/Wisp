@@ -34,6 +34,8 @@ const DEFAULT_PROFILE = {
         soundFeedback: true,
         voicePunctuation: true,
         voiceEnter: true,
+        injectAtCursor: true,
+        clickBeforeType: true,
         pauseDuration: 0.75,
         silenceThreshold: 0.015,
         selectedMicId: ""
@@ -51,18 +53,28 @@ class WispWebApp {
         this.isModelReady = false;
         this.isTranscribing = false;
         this.isWorkerTranscribing = false;
+        this.isNativeEngineActive = false;
+        this.isDesktop = false;
         this.pendingSpeechQueue = [];
         this.batchChunkTimeout = null;
         this.isBatchProcessing = false;
         this.isBatchCancelled = false;
 
         this.initDOM();
-        this.initWorker();
         this.initTabs();
         this.initAudioControls();
         this.initProfileManager();
         this.initLongAudioController();
         this.renderAll();
+
+        // 1. Detectar se está no ambiente desktop nativo (Tauri Rust)
+        this.checkDesktopEnvironment().then(() => {
+            // Se NÃO for modo desktop nativo (modo web puro no navegador), inicia o Web Worker
+            if (!this.isDesktop) {
+                console.log("[WispApp] Modo web navegador, iniciando Web Worker...");
+                this.initWorker();
+            }
+        });
         console.log("[WispWeb] Aplicativo pronto para uso!");
     }
 
@@ -72,10 +84,6 @@ class WispWebApp {
             const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
             if (saved) {
                 const parsed = JSON.parse(saved);
-                // Migração transparente: caso o usuário tivesse o modelo medium (750MB) salvo, migra para o modelo small (150MB)
-                if (parsed.settings && (parsed.settings.modelName === "Xenova/whisper-medium" || parsed.settings.modelName.includes("medium"))) {
-                    parsed.settings.modelName = "Xenova/whisper-small";
-                }
                 return {
                     custom_vocabulary: parsed.custom_vocabulary || DEFAULT_PROFILE.custom_vocabulary,
                     correction_rules: parsed.correction_rules || DEFAULT_PROFILE.correction_rules,
@@ -146,6 +154,17 @@ class WispWebApp {
             settingSoundFeedback: document.getElementById("setting-sound-feedback"),
             settingVoicePunctuation: document.getElementById("setting-voice-punctuation"),
             settingVoiceEnter: document.getElementById("setting-voice-enter"),
+            settingInjectMouse: document.getElementById("setting-inject-mouse"),
+            settingClickBefore: document.getElementById("setting-click-before"),
+            settingClickBeforeRow: document.getElementById("setting-click-before-row"),
+            settingInjectMouseDesc: document.getElementById("setting-inject-mouse-desc"),
+            desktopHardwareCard: document.getElementById("desktop-hardware-card"),
+            desktopHardwareSpecs: document.getElementById("desktop-hardware-specs"),
+            desktopHotkeyRow: document.getElementById("desktop-hotkey-row"),
+            inputGlobalHotkey: document.getElementById("input-global-hotkey"),
+            btnSaveHotkey: document.getElementById("btn-save-hotkey"),
+            selectLongModel: document.getElementById("select-long-model"),
+            desktopModeBadge: document.getElementById("desktop-mode-badge"),
             settingPauseDuration: document.getElementById("setting-pause-duration"),
             labelPauseVal: document.getElementById("label-pause-val"),
             settingSilenceThreshold: document.getElementById("setting-silence-threshold"),
@@ -275,13 +294,57 @@ class WispWebApp {
         }
     }
 
-    loadSelectedModel() {
+    async loadSelectedModel() {
         this.isModelReady = false;
         this.elements.progressCard.style.display = "block";
         this.elements.progressBarFill.style.width = "0%";
         this.elements.progressPercentage.textContent = "0%";
-        this.elements.progressFileName.textContent = "Preparando modelo de IA no navegador...";
+        this.elements.progressFileName.textContent = "Preparando modelo de IA...";
 
+        // Se estiver no ambiente desktop nativo Rust (whisper.cpp)
+        if (this.isDesktop) {
+            try {
+                this.updateSystemStatus("Carregando modelo de IA nativo (whisper.cpp)...", true);
+                this.elements.progressFileName.textContent = `Carregando '${this.profile.settings.modelName}' na memória nativa Rust...`;
+                this.elements.progressBarFill.style.width = "50%";
+                this.elements.progressPercentage.textContent = "50%";
+
+                const data = await this.invokeNative("load_native_model", {
+                    modelName: this.profile.settings.modelName
+                });
+
+                if (data && data.status === "ready") {
+                    this.isModelReady = true;
+                    this.isNativeEngineActive = true;
+                    this.elements.progressBarFill.style.width = "100%";
+                    this.elements.progressPercentage.textContent = "100%";
+                    this.elements.progressCard.style.display = "none";
+                    this.updateSystemStatus(`Pronto (Motor Nativo Rust: ${data.model})`, false);
+                    this.showToast(`Modelo '${data.model}' pronto na memória nativa Rust!`, "success");
+                    return;
+                }
+            } catch (err) {
+                console.warn("[WispApp] Falha ao carregar modelo nativo Rust:", err);
+                this.showToast(`Erro ao carregar modelo nativo: ${err}`, "error");
+            }
+        }
+
+        // Se o Web Worker não foi inicializado ainda
+        if (!this.worker) {
+            this.initWorker();
+            return;
+        }
+
+        // Se for Web Worker e já havia modelo carregado anteriormente, recria o worker para purgar 100% da memória WASM
+        if (this._workerHasLoadedModel) {
+            console.log("[WispApp] Recriando Web Worker para liberar memória WebAssembly (prevenção OrtRun code 6)...");
+            try { this.worker.terminate(); } catch (_) {}
+            this.worker = null;
+            this.initWorker();
+            return;
+        }
+
+        this._workerHasLoadedModel = true;
         this.worker.postMessage({
             type: "LOAD_MODEL",
             payload: { modelName: this.profile.settings.modelName }
@@ -495,9 +558,17 @@ class WispWebApp {
     }
 
     async toggleMicrophone() {
+        const now = Date.now();
+        if (this._lastToggleTime && (now - this._lastToggleTime) < 400) {
+            console.log("[WispApp] toggleMicrophone ignorado por debounce (<400ms)");
+            return;
+        }
+        this._lastToggleTime = now;
+
         if (this.audioManager.isActive) {
             this.audioManager.stop();
             this.updateMicUiState(false);
+            this.showToast("Microfone desligado (Ctrl+F8)", "info");
         } else {
             if (!this.isModelReady) {
                 this.showToast("Aguarde o modelo de IA terminar de carregar...", "info");
@@ -517,6 +588,7 @@ class WispWebApp {
                 );
 
                 this.updateMicUiState(true);
+                this.showToast("Microfone ligado - Ouvindo voz (Ctrl+F8)", "success");
 
                 // Permissão concedida: atualiza nomes reais dos dispositivos no dropdown
                 this.populateMicrophoneList();
@@ -544,9 +616,36 @@ class WispWebApp {
         this.dispatchDictationChunk(audioFloat32, durationSec);
     }
 
-    dispatchDictationChunk(audioFloat32, durationSec) {
-        if (!this.worker || !this.isModelReady) return;
+    async dispatchDictationChunk(audioFloat32, durationSec) {
+        if (!this.isModelReady) return;
         this.isWorkerTranscribing = true;
+
+        // Se o motor nativo Rust (whisper.cpp) estiver ativo no Desktop
+        if (this.isDesktop && this.isNativeEngineActive) {
+            try {
+                const t0 = performance.now();
+                const res = await this.invokeNative("transcribe_native_audio", {
+                    audio: Array.from(audioFloat32),
+                    language: this.profile.settings.language || "portuguese"
+                });
+
+                const latency = Math.round(performance.now() - t0);
+                this.isWorkerTranscribing = false;
+                this.handleTranscriptionSuccess({
+                    rawText: res.text,
+                    latency: res.latency_ms || latency
+                });
+                this.processNextPendingDictation();
+                return;
+            } catch (err) {
+                console.warn("[WispApp] Falha na transcrição nativa Rust:", err);
+            }
+        }
+
+        if (!this.worker) {
+            this.isWorkerTranscribing = false;
+            return;
+        }
 
         this.worker.postMessage({
             type: "TRANSCRIBE",
@@ -588,6 +687,7 @@ class WispWebApp {
             // Caso 1: Disse apenas "entra"
             if (lower === "entra" || lower === "entra." || lower === "entra!") {
                 this.injectTextIntoEditor("\n");
+                this.pressEnterNative();
                 this.recordHistory("[Comando Entra]");
                 return;
             }
@@ -625,28 +725,278 @@ class WispWebApp {
 
         if (pressEnterBefore) {
             this.injectTextIntoEditor("\n");
+            this.pressEnterNative();
         }
 
         if (processed.trim()) {
-            this.injectTextIntoEditor(processed.trim() + " ");
+            const formatted = processed.trim() + " ";
+            this.injectTextIntoEditor(formatted);
+            this.injectTextNative(formatted);
             this.recordHistory(processed.trim());
         }
 
         if (pressEnterAfter) {
             this.injectTextIntoEditor("\n");
+            this.pressEnterNative();
+        }
+    }
+
+
+
+    // Helper para invocação nativa robusta no Tauri v2 (suporta __TAURI_INTERNALS__, __TAURI__.core e __TAURI__)
+    async invokeNative(cmd, args = {}) {
+        try {
+            if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === "function") {
+                return await window.__TAURI_INTERNALS__.invoke(cmd, args);
+            }
+            if (window.__TAURI__?.core && typeof window.__TAURI__.core.invoke === "function") {
+                return await window.__TAURI__.core.invoke(cmd, args);
+            }
+            if (window.__TAURI__ && typeof window.__TAURI__.invoke === "function") {
+                return await window.__TAURI__.invoke(cmd, args);
+            }
+        } catch (e) {
+            console.warn(`[Tauri] Erro ao invocar comando '${cmd}':`, e);
+            throw e;
+        }
+        throw new Error("Tauri API indisponível");
+    }
+
+    // Verificação de ambiente nativo Tauri Desktop
+    async checkDesktopEnvironment() {
+        const isTauriHost = (typeof window !== "undefined") && (
+            (window.location && window.location.origin && window.location.origin.includes("tauri.localhost")) ||
+            window.isTauri === true
+        );
+
+        let isNative = false;
+        // Tenta detectar Tauri IPC com retry rápido
+        for (let attempt = 0; attempt < 12; attempt++) {
+            const hasTauriApi = (typeof window !== "undefined") && (
+                (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === "function") ||
+                (window.__TAURI__ && (window.__TAURI__.core || window.__TAURI__.invoke))
+            );
+
+            if (hasTauriApi || isTauriHost) {
+                try {
+                    isNative = await this.invokeNative("is_desktop_native").catch(() => false);
+                    if (isNative) break;
+                } catch (e) {}
+            }
+
+            if (isTauriHost && attempt >= 2) {
+                isNative = true;
+                break;
+            }
+
+            await new Promise(r => setTimeout(r, 50));
+        }
+
+        if (isNative || isTauriHost) {
+            this.isDesktop = true;
+            document.body.classList.add("is-desktop");
+            console.log("[Wisp Desktop] Modo Desktop Nativo ativado via Tauri!");
+
+            if (this.elements.desktopModeBadge) {
+                this.elements.desktopModeBadge.style.display = "inline-flex";
+            }
+            if (this.elements.desktopHotkeyRow) {
+                this.elements.desktopHotkeyRow.style.display = "flex";
+            }
+            if (this.elements.settingInjectMouse) {
+                this.elements.settingInjectMouse.disabled = false;
+            }
+            if (this.elements.settingInjectMouseDesc) {
+                this.elements.settingInjectMouseDesc.textContent = "Digita automaticamente na janela onde o mouse estiver apontado (Word, Bloco de Notas, Navegador, etc.).";
+            }
+
+            // Desbloqueia modelos profissionais (Medium e Large Turbo)
+            this.unlockDesktopModels();
+
+            // Obter hardware e acelerar modelos
+            try {
+                const hwInfo = await this.invokeNative("get_system_hardware_info").catch(() => null);
+                if (hwInfo) {
+                    this.desktopHwInfo = hwInfo;
+                    this.renderHardwareBadge(hwInfo);
+                    this.unlockDesktopModels(hwInfo);
+                }
+            } catch (e) {
+                console.warn("[Tauri Desktop] Não foi possível ler hardware:", e);
+            }
+
+            // Inicializar listener de atalho global
+            this.setupDesktopHotkeyListener();
+
+            // Atualiza badge de modo desktop nativo Rust
+            if (this.elements.desktopModeBadge) {
+                this.elements.desktopModeBadge.innerHTML = `⚡ Motor Nativo Rust / C++ (100% Embutido)`;
+                this.elements.desktopModeBadge.style.display = "inline-flex";
+            }
+
+            // Carrega modelo diretamente na memória nativa Rust (whisper.cpp)
+            await this.loadSelectedModel();
+            return;
+        }
+
+        // Modo Web puro (GitHub Pages)
+        this.isDesktop = false;
+        document.body.classList.remove("is-desktop");
+        if (this.elements.desktopModeBadge) {
+            this.elements.desktopModeBadge.style.display = "none";
+        }
+        if (this.elements.desktopHotkeyRow) {
+            this.elements.desktopHotkeyRow.style.display = "none";
+        }
+        if (this.elements.settingInjectMouse) {
+            this.elements.settingInjectMouse.disabled = true;
+        }
+        if (this.elements.settingInjectMouseDesc) {
+            this.elements.settingInjectMouseDesc.textContent = "Disponível na versão Desktop instalada (no navegador web, o texto vai para o editor abaixo).";
+        }
+    }
+
+
+    // Desbloquear modelos de alta capacidade (Medium ~750MB e Large Turbo ~800MB)
+    unlockDesktopModels(hwInfo = null) {
+        document.body.classList.add("is-desktop");
+
+        const desktopModels = [
+            {
+                value: "Xenova/whisper-medium",
+                label: "👑 Modelo Profissional (~750 MB - Alta Precisão Desktop)"
+            },
+            {
+                value: "onnx-community/whisper-large-v3-turbo",
+                label: "⚡ Modelo Ultra Turbo (~800 MB - Máxima Inteligência Desktop)"
+            }
+        ];
+
+        const selects = [this.elements.selectModel, this.elements.selectLongModel].filter(Boolean);
+
+        for (const select of selects) {
+            for (const dm of desktopModels) {
+                let opt = select.querySelector(`option[value="${dm.value}"]`);
+                if (!opt) {
+                    opt = document.createElement("option");
+                    opt.value = dm.value;
+                    opt.className = "desktop-only-model";
+                    select.appendChild(opt);
+                }
+                opt.textContent = dm.label;
+                opt.style.display = "";
+            }
+        }
+
+        // Se o perfil do usuário salvou um desses modelos, seleciona no dropdown
+        if (this.profile && this.profile.settings && this.profile.settings.modelName) {
+            if (this.elements.selectModel) {
+                this.elements.selectModel.value = this.profile.settings.modelName;
+            }
+            if (this.elements.selectLongModel) {
+                this.elements.selectLongModel.value = this.profile.settings.modelName;
+            }
+        }
+
+        console.log("[Wisp Desktop] Modelos de alta precisão (Medium e Large Turbo) disponíveis!");
+    }
+
+    // Exibe detalhes de hardware no badge de modo desktop
+    renderHardwareBadge(hwInfo) {
+        if (!this.elements.desktopModeBadge || !hwInfo) return;
+        const cores = hwInfo.cpu_cores || 4;
+        const ram = hwInfo.total_ram_gb ? Math.round(hwInfo.total_ram_gb) : 8;
+        this.elements.desktopModeBadge.innerHTML = `🖥️ Desktop Nativo (${cores} Núcleos / ${ram}GB RAM)`;
+        this.elements.desktopModeBadge.title = `Processador: ${cores} núcleos lógicos | Memória RAM: ${hwInfo.total_ram_gb} GB (${hwInfo.avail_ram_gb} GB disponíveis)`;
+    }
+
+    // Configura escuta e gerenciamento de atalho global
+    async setupDesktopHotkeyListener() {
+        if (!this.isDesktop) return;
+
+        // 1. Carregar atalho atual do backend Rust
+        try {
+            const currentHotkey = await this.invokeNative("get_current_global_hotkey");
+            if (currentHotkey && this.elements.inputGlobalHotkey) {
+                this.elements.inputGlobalHotkey.value = currentHotkey;
+            }
+        } catch (e) {
+            console.warn("[Tauri Desktop] Erro ao obter atalho configurado:", e);
+        }
+
+        // 2. Botão Salvar Atalho
+        if (this.elements.btnSaveHotkey && !this.elements.btnSaveHotkey._bound) {
+            this.elements.btnSaveHotkey._bound = true;
+            this.elements.btnSaveHotkey.addEventListener("click", async () => {
+                const newHotkey = this.elements.inputGlobalHotkey ? this.elements.inputGlobalHotkey.value.trim() : "Ctrl+F8";
+                try {
+                    const res = await this.invokeNative("update_global_hotkey", { hotkey: newHotkey });
+                    this.showToast(res || `Atalho atualizado para ${newHotkey}!`, "success");
+                } catch (err) {
+                    this.showToast(`Erro ao alterar atalho: ${err}`, "error");
+                }
+            });
+        }
+
+        // 3. Ouvir evento de acionamento do atalho global (backup além do window.eval)
+        try {
+            if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.listen === "function") {
+                await window.__TAURI__.event.listen("global-hotkey-toggle", () => {
+                    console.log("[Tauri Desktop] Evento de atalho global capturado via event listener!");
+                    this.toggleMicrophone();
+                });
+            } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.listen === "function") {
+                await window.__TAURI_INTERNALS__.listen("global-hotkey-toggle", () => {
+                    console.log("[Tauri Desktop] Evento de atalho global capturado via internals listener!");
+                    this.toggleMicrophone();
+                });
+            }
+        } catch (e) {
+            console.warn("[Tauri Desktop] Falha ao registrar event listener de atalho:", e);
+        }
+    }
+
+    // Injeção de texto direto onde o mouse estiver apontado via Tauri Win32
+    async injectTextNative(text) {
+        if (!this.isDesktop || this.profile.settings.injectAtCursor === false) return;
+        const clickToFocus = this.profile.settings.clickBeforeType === true;
+        try {
+            await this.invokeNative("inject_text_at_cursor", {
+                text: text.trim() + " ",
+                clickToFocus: clickToFocus
+            });
+        } catch (err) {
+            console.warn("[Tauri Desktop] Falha ao injetar texto no cursor:", err);
+        }
+    }
+
+    // Envio do comando Enter na janela focada via Tauri Win32
+    async pressEnterNative() {
+        if (!this.isDesktop || this.profile.settings.injectAtCursor === false) return;
+        try {
+            await this.invokeNative("press_enter_at_cursor", {
+                clickToFocus: true
+            });
+        } catch (err) {
+            console.warn("[Tauri Desktop] Falha ao enviar Enter no cursor:", err);
         }
     }
 
     // Inserção inteligente de texto no cursor do editor
     injectTextIntoEditor(text) {
         const editor = this.elements.editor;
+        if (!editor) return;
         const start = editor.selectionStart;
         const end = editor.selectionEnd;
         const currentVal = editor.value;
 
         editor.value = currentVal.substring(0, start) + text + currentVal.substring(end);
         editor.selectionStart = editor.selectionEnd = start + text.length;
-        editor.focus();
+
+        // Só dá foco no editor HTML se NÃO estiver no modo desktop com injeção externa ativa
+        if (!this.isDesktop || this.profile.settings.injectAtCursor === false) {
+            editor.focus();
+        }
         editor.scrollTop = editor.scrollHeight; // Auto-scroll dinâmico
         this.updateEditorStats();
     }
@@ -760,6 +1110,21 @@ class WispWebApp {
             this.profile.settings.voiceEnter = e.target.checked;
             this.saveProfile();
         });
+
+        if (this.elements.settingInjectMouse) {
+            this.elements.settingInjectMouse.checked = this.profile.settings.injectAtCursor !== false;
+        if (this.elements.settingClickBefore) {
+            this.elements.settingClickBefore.checked = this.profile.settings.clickBeforeType === true;
+            this.elements.settingClickBefore.addEventListener("change", (e) => {
+                this.profile.settings.clickBeforeType = e.target.checked;
+                this.saveProfile();
+            });
+        }
+            this.elements.settingInjectMouse.addEventListener("change", (e) => {
+                this.profile.settings.injectAtCursor = e.target.checked;
+                this.saveProfile();
+            });
+        }
 
         this.elements.settingPauseDuration.value = this.profile.settings.pauseDuration;
         this.elements.labelPauseVal.textContent = `${this.profile.settings.pauseDuration} s`;
@@ -1488,14 +1853,55 @@ class WispWebApp {
 
         const chunk = this.batchChunks[this.batchCurrentIndex];
         const language = this.elements.selectLongLang.value || "portuguese";
+        const modelName = this.elements.selectLongModel.value || this.profile.settings.modelName || "";
 
         this.updateBatchProgressUI(this.batchCurrentIndex, this.batchChunks.length);
 
-        // Timeout dinâmico por bloco baseado no porte do modelo selecionado
-        const modelName = this.profile.settings.modelName || "";
-        let chunkTimeoutMs = 70000; // 70s para tiny e base (que levam 2-5s)
+        // Se o motor nativo Rust (whisper.cpp) estiver ativo, transcreve direto na memória!
+        if (this.isDesktop && this.isNativeEngineActive) {
+            const t0 = performance.now();
+            this.invokeNative("transcribe_native_audio", {
+                audio: Array.from(chunk.audioFloat32),
+                language: language
+            })
+            .then(res => {
+                const latency = Math.round(performance.now() - t0);
+                this.handleBatchChunkSuccess({
+                    chunkIndex: chunk.chunkIndex,
+                    totalChunks: chunk.totalChunks,
+                    rawText: res.text,
+                    latency: res.latency_ms || latency,
+                    startSec: chunk.startSec,
+                    endSec: chunk.endSec
+                });
+            })
+            .catch(err => {
+                console.warn("[Batch] Falha na transcrição nativa Rust, tentando fallback:", err);
+                if (this.worker) {
+                    this.worker.postMessage({
+                        type: "TRANSCRIBE_CHUNK",
+                        payload: {
+                            chunkIndex: chunk.chunkIndex,
+                            totalChunks: chunk.totalChunks,
+                            audioFloat32: chunk.audioFloat32,
+                            language: language,
+                            startSec: chunk.startSec,
+                            endSec: chunk.endSec
+                        }
+                    });
+                } else {
+                    this.handleBatchChunkError({
+                        chunkIndex: chunk.chunkIndex,
+                        message: err.message || String(err)
+                    });
+                }
+            });
+            return;
+        }
+
+        let chunkTimeoutMs = 60000;
         if (modelName.includes("medium") || modelName.includes("large")) {
-            chunkTimeoutMs = 180000; // 3 minutos para medium (modelo de 750MB em WASM CPU)
+            chunkTimeoutMs = 180000; // 3 minutos para medium em WASM CPU
         } else if (modelName.includes("small")) {
             chunkTimeoutMs = 100000; // 100s para small (150MB)
         }
@@ -1510,17 +1916,19 @@ class WispWebApp {
             }
         }, chunkTimeoutMs);
 
-        this.worker.postMessage({
-            type: "TRANSCRIBE_CHUNK",
-            payload: {
-                chunkIndex: chunk.chunkIndex,
-                totalChunks: chunk.totalChunks,
-                audioFloat32: chunk.audioFloat32,
-                language: language,
-                startSec: chunk.startSec,
-                endSec: chunk.endSec
-            }
-        });
+        if (this.worker) {
+            this.worker.postMessage({
+                type: "TRANSCRIBE_CHUNK",
+                payload: {
+                    chunkIndex: chunk.chunkIndex,
+                    totalChunks: chunk.totalChunks,
+                    audioFloat32: chunk.audioFloat32,
+                    language: language,
+                    startSec: chunk.startSec,
+                    endSec: chunk.endSec
+                }
+            });
+        }
     }
 
     handleBatchChunkSuccess(payload) {

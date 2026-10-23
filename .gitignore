@@ -1,4 +1,4 @@
-﻿# Ambientes Virtuais Python
+# Ambientes Virtuais Python
 .venv/
 env/
 venv/
@@ -8,6 +8,61 @@ ENV/
 __pycache__/
 *.py[cod]
 *.class
+
+# Node / NPM
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Tauri & Rust Builds
+src-tauri/target/
+**/target/
+target/
+**/*.rs.bk
+Cargo.lock
+
+# Compilados e Binários Locais
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+*.msi
+*.zip
+
+# Permitir executáveis e instaladores prontos da pasta release
+!release/
+!release/**/
+!release/**/*.exe
+!release/**/*.msi
+!release/*.exe
+!release/*.msi
+
+# Código Fonte Desktop (Rust e Python) - Mantido apenas localmente
+src-tauri/
+native_engine.py
+release/**/*.py
+copy-assets.js
+package.json
+package-lock.json
+PLANEJAMENTO_TAURI_DESKTOP.md
+
+# Modelos de IA e Arquivos Pesados (>100MB não permitidos pelo GitHub)
+models/
+release/models/
+*.bin
+*.part
+
+# Segredos, Chaves e Variáveis de Ambiente
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+*.pfx
 
 # IDE & Editores
 .vscode/
@@ -22,5 +77,8 @@ Desktop.ini
 .BIN/
 .DS_Store
 
-# Logs locais
+# Logs e Temporários
 *.log
+.cache/
+dist/
+build/

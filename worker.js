@@ -1,14 +1,20 @@
-// Web Worker para Inferência de Reconhecimento de Voz 100% In-Browser (Client-Side)
+// Web Worker para Inferência de Reconhecimento de Voz 100% In-Browser / Local
 import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/+esm";
 
 // Configurações do ambiente
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
-// Configurar fallback para WASM estável de thread única (compatível com todos os navegadores)
+// Detectar núcleos lógicos disponíveis no processador para aceleração de hardware nativo
+const detectedCores = (typeof navigator !== "undefined" && navigator.hardwareConcurrency) ? navigator.hardwareConcurrency : 4;
+// SharedArrayBuffer só é permitido pelo navegador se crossOriginIsolated for verdadeiro
+const hasSharedArrayBuffer = (typeof SharedArrayBuffer !== "undefined") && (typeof crossOriginIsolated !== "undefined" && crossOriginIsolated);
+const optimalThreads = hasSharedArrayBuffer ? Math.min(Math.max(detectedCores, 2), 4) : 1;
+
 try {
     if (env.backends && env.backends.onnx && env.backends.onnx.wasm) {
-        env.backends.onnx.wasm.numThreads = 1;
+        env.backends.onnx.wasm.simd = true;
+        env.backends.onnx.wasm.numThreads = optimalThreads;
         env.backends.onnx.wasm.proxy = false;
     }
 } catch (_) {}
@@ -81,10 +87,17 @@ async function handleMessage(data) {
             isInitializing = true;
             self.postMessage({ 
                 type: "STATUS_UPDATE", 
-                payload: { status: "Carregando modelo de IA no navegador...", isBusy: true } 
+                payload: { status: "Carregando modelo de IA no dispositivo local...", isBusy: true } 
             });
 
             currentModel = modelName;
+
+            // Otimizações seguras de multithreading
+            if (env.backends && env.backends.onnx && env.backends.onnx.wasm) {
+                env.backends.onnx.wasm.simd = true;
+                env.backends.onnx.wasm.numThreads = optimalThreads;
+            }
+
             transcriber = await pipeline("automatic-speech-recognition", modelName, {
                 quantized: true,
                 progress_callback: (progressData) => {
@@ -105,6 +118,23 @@ async function handleMessage(data) {
                 payload: { status: "Modelo pronto na memória local", isBusy: false } 
             });
         } catch (err) {
+            // Se falhou com multithreading, tenta fallback imediato e silencioso para single-thread WASM seguro
+            if (env.backends?.onnx?.wasm?.numThreads > 1) {
+                console.warn("[Worker] Tentando fallback seguro com 1 thread WASM...");
+                try {
+                    env.backends.onnx.wasm.numThreads = 1;
+                    transcriber = await pipeline("automatic-speech-recognition", modelName, {
+                        quantized: true
+                    });
+                    isInitializing = false;
+                    self.postMessage({ type: "MODEL_READY", payload: { modelName } });
+                    self.postMessage({ type: "STATUS_UPDATE", payload: { status: "Modelo pronto na memória local", isBusy: false } });
+                    return;
+                } catch (retryErr) {
+                    err = retryErr;
+                }
+            }
+
             isInitializing = false;
             const errMsg = (err && err.message) ? err.message : String(err);
             console.error("Erro no Worker ao carregar modelo:", err);
@@ -131,14 +161,12 @@ async function handleMessage(data) {
             let rawText = "";
 
             if (cleanAudio.length >= 1600) { // pelo menos 0.1s de áudio
-                // Para blocos pré-fatiados <= 30s, chamamos sem chunk_length_s / stride_length_s
-                // para garantir inferência direta, rápida (1 única passagem) e sem falhas de alinhamento
-                const isMedium = currentModel.includes("medium") || currentModel.includes("large");
+                const isHeavy = currentModel.includes("medium") || currentModel.includes("large");
                 const output = await transcriber(cleanAudio, {
                     language: language || "portuguese",
                     task: "transcribe",
                     return_timestamps: false,
-                    max_new_tokens: isMedium ? 64 : 128,
+                    max_new_tokens: isHeavy ? 64 : 64,
                     num_beams: 1
                 });
 
@@ -189,12 +217,12 @@ async function handleMessage(data) {
             let rawText = "";
 
             if (cleanAudio.length >= 1600) {
-                const isMedium = currentModel.includes("medium") || currentModel.includes("large");
+                const isHeavy = currentModel.includes("medium") || currentModel.includes("large");
                 const output = await transcriber(cleanAudio, {
                     language: language || "portuguese",
                     task: "transcribe",
                     return_timestamps: false,
-                    max_new_tokens: isMedium ? 64 : 128,
+                    max_new_tokens: isHeavy ? 64 : 64,
                     num_beams: 1
                 });
 
