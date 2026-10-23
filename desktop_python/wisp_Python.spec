@@ -4,7 +4,7 @@ from PyInstaller.utils.hooks import copy_metadata
 
 datas = [('C:\\Projetos_IA\\Wisp_web\\desktop_python\\templates', 'templates'), ('C:\\Projetos_IA\\Wisp_web\\desktop_python\\static', 'static')]
 binaries = []
-hiddenimports = ['PySide6.QtWebEngineWidgets', 'PySide6.QtWebEngineCore', 'PySide6.QtWidgets', 'PySide6.QtGui', 'PySide6.QtCore', 'engine', 'server', 'injector', 'hotkey', 'hardware']
+hiddenimports = ['PySide6.QtWebEngineWidgets', 'PySide6.QtWebEngineCore', 'PySide6.QtWidgets', 'PySide6.QtGui', 'PySide6.QtCore', 'yaml', 'config', 'engine', 'server', 'injector', 'hotkey', 'hardware']
 datas += copy_metadata('faster-whisper')
 datas += copy_metadata('ctranslate2')
 datas += copy_metadata('huggingface_hub')
@@ -33,16 +33,13 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='wisp_Python',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -50,4 +47,13 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['C:\\Projetos_IA\\Wisp_web\\desktop_python\\static\\icons\\icon.ico'],
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='wisp_Python',
 )

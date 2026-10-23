@@ -56,6 +56,9 @@ PLANEJAMENTO_TAURI_DESKTOP.md
 # Modelos de IA e Arquivos Pesados (>100MB não permitidos pelo GitHub)
 models/
 release/models/
+release/wisp_Python/_internal/
+release/wisp_Python/models/
+release/wisp_Python/data/
 *.bin
 *.part
 

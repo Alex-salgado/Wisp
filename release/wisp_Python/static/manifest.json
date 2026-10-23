@@ -1,0 +1,19 @@
+{
+    "name": "Wisp - Ditador Pessoal Privado",
+    "short_name": "Wisp",
+    "description": "Ditador e transcritor de voz por IA 100% privado e local no seu navegador. Zero envio de dados para servidores externos.",
+    "start_url": "./index.html",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#0e131f",
+    "theme_color": "#0e131f",
+    "orientation": "any",
+    "icons": [
+        {
+            "src": "assets/icon.png",
+            "sizes": "256x256",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

@@ -1,1 +1,1 @@
-release/wisp_Python.exe filter=lfs diff=lfs merge=lfs -text
+release/wisp_Python/wisp_Python.exe filter=lfs diff=lfs merge=lfs -text

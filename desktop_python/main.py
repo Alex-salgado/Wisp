@@ -8,12 +8,16 @@ if sys.stderr is None:
     sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
 if getattr(sys, 'frozen', False):
-    BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    APP_DIR = os.path.dirname(sys.executable)
+    BASE_DIR = getattr(sys, '_MEIPASS', APP_DIR)
 else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = APP_DIR
 
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
+if APP_DIR not in sys.path:
+    sys.path.insert(0, APP_DIR)
 
 import time
 import socket
@@ -21,16 +25,13 @@ import threading
 import webbrowser
 import subprocess
 
-from server import app, start_server
+from config import cfg
+from server import app, start_server, stop_server
 from hotkey import hotkey_manager
 from engine import whisper_engine
 import injector
 
 def find_available_port(start_port=28940, max_port=29040):
-    """
-    Localiza uma porta livre e segura a partir de 28940 (faixa privada, pouco usada).
-    Verifica se a porta já está em uso tentando fazer bind. Se estiver ocupada, tenta a próxima.
-    """
     for port in range(start_port, max_port):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -53,9 +54,9 @@ def run_qt_window(url, port):
 
     # Ícone do aplicativo
     icon_candidates = [
+        os.path.join(APP_DIR, "static", "icons", "icon.ico"),
         os.path.join(BASE_DIR, "static", "icons", "icon.ico"),
-        os.path.join(os.path.dirname(sys.executable), "static", "icons", "icon.ico"),
-        os.path.join(BASE_DIR, "static", "assets", "icon.ico")
+        os.path.join(APP_DIR, "static", "assets", "icon.ico")
     ]
     icon = QIcon()
     for ic in icon_candidates:
@@ -66,12 +67,15 @@ def run_qt_window(url, port):
 
     window = QMainWindow()
     window.setWindowTitle("Wisp Desktop — Ditador Pessoal Privado (100% Local)")
-    window.resize(1080, 780)
+
+    win_w = cfg.get("ui", {}).get("window_width", 1080)
+    win_h = cfg.get("ui", {}).get("window_height", 780)
+    window.resize(win_w, win_h)
 
     # Centraliza janela na tela principal
     screen_geo = qt_app.primaryScreen().geometry()
-    x = (screen_geo.width() - 1080) // 2
-    y = (screen_geo.height() - 780) // 2
+    x = (screen_geo.width() - win_w) // 2
+    y = (screen_geo.height() - win_h) // 2
     window.move(max(0, x), max(0, y))
 
     webview = QWebEngineView()
@@ -90,7 +94,7 @@ def run_qt_window(url, port):
     webview.load(QUrl(url))
     window.setCentralWidget(webview)
 
-    # Registra o identificador HWND da janela para o injetor não digitar sobre si mesmo
+    # Exibe a janela imediatamente para o usuário ter retorno visual instantâneo (<1s)
     window.show()
     try:
         wisp_hwnd = int(window.winId())
@@ -135,45 +139,48 @@ def run_browser_app(url):
     for exe in edge_paths:
         if os.path.exists(exe):
             try:
-                subprocess.Popen([exe, f"--app={url}", "--window-size=1080,780"])
+                subprocess.Popen([exe, f"--app={url}", f"--window-size={cfg.get('ui', {}).get('window_width', 1080)},{cfg.get('ui', {}).get('window_height', 780)}"])
                 return
             except Exception:
                 pass
     webbrowser.open(url)
 
 def main():
-    port = find_available_port(start_port=28940, max_port=29040)
+    # 1. Obter porta do config.yaml
+    cfg_port = cfg.get("server", {}).get("port", 28940)
+    auto_port = cfg.get("server", {}).get("auto_port", True)
+
+    if auto_port:
+        port = find_available_port(start_port=cfg_port, max_port=cfg_port + 100)
+    else:
+        port = cfg_port
+
     url = f"http://127.0.0.1:{port}"
 
-    # 1. Iniciar servidor Flask silencioso em segundo plano
+    # 2. Iniciar servidor Flask silencioso em segundo plano
     server_thread = threading.Thread(
         target=start_server,
-        kwargs={"host": "127.0.0.1", "port": port, "debug": False},
+        kwargs={"host": "127.0.0.1", "port": port},
         daemon=True
     )
     server_thread.start()
 
-    # 2. Iniciar monitor global de atalhos (Ctrl + F8)
+    # 3. Configurar e iniciar atalho global
+    saved_hotkey = cfg.get("dictation", {}).get("global_hotkey", "Ctrl+F8")
+    hotkey_manager.update_hotkey(saved_hotkey)
     hotkey_manager.start()
 
-    # 3. Pré-carregar modelo small na GPU NVIDIA RTX 5060 em segundo plano
-    threading.Thread(target=lambda: whisper_engine.load_model("small"), daemon=True).start()
-
-    # 4. Aguardar o servidor responder antes de abrir a interface
-    for _ in range(40):
+    # 4. Aguardar o servidor responder antes de carregar a página
+    for _ in range(60):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if s.connect_ex(("127.0.0.1", port)) == 0:
                 break
-        time.sleep(0.05)
+        time.sleep(0.04)
 
-    # 5. Iniciar interface gráfica (PySide6 WebEngine com fallback para Navegador App)
+    # 5. Iniciar interface gráfica
     try:
         exit_code = run_qt_window(url, port)
     except Exception as e:
-        log_file = os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__), "wisp_startup.log")
-        with open(log_file, "a", encoding="utf-8") as f:
-            import traceback
-            f.write(f"run_qt_window error: {e}\n{traceback.format_exc()}\n")
         run_browser_app(url)
         try:
             while True:
@@ -182,14 +189,8 @@ def main():
             pass
 
     # Finalização limpa
+    stop_server()
     hotkey_manager.stop()
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        log_file = os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__), "wisp_startup.log")
-        with open(log_file, "a", encoding="utf-8") as f:
-            import traceback
-            f.write(f"Fatal error: {e}\n{traceback.format_exc()}\n")
-
+    main()
